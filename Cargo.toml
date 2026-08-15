@@ -1,0 +1,54 @@
+[package]
+name = "frater"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[dependencies]
+anyhow = "1.0.104"
+axum = "0.8.9"
+axum-extra = { version = "0.10", features = ["cookie"] }
+argon2 = "0.5"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde", "clock"] }
+hkdf = "0.12"
+hmac = "0.12"
+libc = "0.2"
+maud = { version = "0.27", features = ["axum"] }
+rand = "0.9"
+rand_core = { version = "0.6", features = ["getrandom"] }
+rpassword = "7"
+sha2 = "0.10"
+subtle = "2.6"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+url = "2.5"
+zeroize = "1"
+rmcp = { version = "3.1.2", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
+sea-orm = { version = "2.0.2", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"], default-features = false }
+sea-orm-migration = { version = "2.0.2", default-features = false, features = ["sqlx-sqlite", "runtime-tokio-rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.53.1", features = ["macros", "net", "rt-multi-thread", "signal", "sync"] }
+tokio-util = "0.7.19"
+tower-http = { version = "0.7.0", features = ["trace", "timeout", "compression-gzip", "compression-br"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+email_address = "0.2.9"
+lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "rustls-native-certs", "pool", "ring"] }
+async-trait = "0.1.92"
+
+[build-dependencies]
+sha2 = "0.10"
+
+[dev-dependencies]
+tower = { version = "0.5.3", features = ["util"] }
+rmcp = { version = "3.1.2", default-features = false, features = ["client", "transport-streamable-http-client"] }
+futures = "0.3"
+sse-stream = "0.2.4"
