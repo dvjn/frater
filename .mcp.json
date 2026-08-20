@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "frater": {
+      "url": "http://localhost:3000/mcp",
+      "protocolVersion": "2026-07-28",
+      "directTools": true
+    }
+  }
+}

@@ -1,0 +1,21 @@
+// Persistence models are intentionally private to the domain layer.
+pub(super) mod auth_one_time_tokens;
+pub(super) mod auth_sessions;
+pub(super) mod equipment;
+pub(super) mod exercise_equipment;
+pub(super) mod exercise_muscles;
+pub(super) mod exercise_sets;
+pub(super) mod exercises;
+pub(super) mod muscles;
+pub(super) mod oauth_access_tokens;
+pub(super) mod oauth_authorization_codes;
+pub(super) mod oauth_client_redirect_uris;
+pub(super) mod oauth_clients;
+pub(super) mod oauth_device_authorizations;
+pub(super) mod oauth_refresh_token_families;
+pub(super) mod oauth_refresh_tokens;
+pub(super) mod password_credentials;
+pub(super) mod runs;
+pub(super) mod session_exercises;
+pub(super) mod sessions;
+pub(super) mod users;

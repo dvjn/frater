@@ -1,0 +1,14 @@
+# Rust build output
+target/
+
+# Local dev server data
+data/
+
+# Local environment and mise overrides
+mise.local.toml
+
+# Pi MCP protocol traces
+.pi/mcp-traces/
+
+# Cross-compiled release artifacts
+dist/

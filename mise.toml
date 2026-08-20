@@ -1,0 +1,107 @@
+[tools]
+rust = { version = "1.97.1", components = "rustfmt,clippy" }
+zig = "0.16.0"
+# The github backend downloads prebuilt binaries from GitHub releases, so no
+# tool compiles from source. The rustsec repo is a monorepo, so the version is
+# the full release tag of cargo-audit.
+"github:rustsec/rustsec" = { version = "cargo-audit/v0.22.2", exe = "cargo-audit" }
+"github:rust-cross/cargo-zigbuild" = { version = "0.23.0", exe = "cargo-zigbuild" }
+watchexec = "2.5.1"
+
+[env]
+TARGETS = "x86_64-unknown-linux-gnu:amd64 aarch64-unknown-linux-gnu:arm64"
+
+[tasks.dev]
+description = "Start the Axum development server with live reload"
+run = "watchexec --restart --clear --watch src --watch Cargo.toml --watch Cargo.lock --exts rs,toml -- cargo run"
+
+[tasks.build]
+description = "Build an optimized release binary for the host"
+run = "cargo build --release"
+sources = ["src/**/*.rs", "Cargo.toml", "Cargo.lock"]
+outputs = ["target/release/frater"]
+
+[tasks.test]
+description = "Run all tests"
+run = "cargo test"
+
+[tasks.fmt]
+description = "Format Rust source files"
+run = "cargo fmt --all"
+
+[tasks.fmt-check]
+description = "Check Rust source formatting"
+run = "cargo fmt --all --check"
+
+[tasks.lint]
+description = "Run Clippy with warnings denied"
+run = "cargo clippy --all-targets --all-features -- -D warnings"
+
+[tasks.audit]
+description = "Check dependencies for known vulnerabilities"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+cargo audit
+# An ignored advisory in .cargo/audit.toml is only safe while the crate stays
+# out of the resolved graph. Fail when it comes back.
+tree="$(cargo tree --target all --prefix none --format '{p}')"
+if grep -Eq '^rkyv v0\\.7\\.46($|[[:space:]])' <<<"$tree"; then
+  echo "error: rkyv 0.7.46 is in the dependency graph, so RUSTSEC-2026-0235 is no longer unreachable" >&2
+  exit 1
+fi
+"""
+
+[tasks.check]
+description = "Run formatting, lint, tests, and dependency audit"
+depends = ["fmt-check", "lint", "test", "audit"]
+
+[tasks.dist]
+description = "Cross-compile the release binaries into dist/<arch>/frater"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+rm -rf dist
+for entry in $TARGETS; do
+  target="${entry%%:*}"
+  arch="${entry##*:}"
+  rustup target add "$target"
+  cargo zigbuild --release --locked --target "$target"
+  install -Dm755 "target/$target/release/frater" "dist/$arch/frater"
+done
+"""
+sources = ["src/**/*.rs", "build.rs", "Cargo.toml", "Cargo.lock"]
+
+[tasks.package]
+description = "Make the release tarballs and checksums from dist/"
+depends = ["dist"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+version="${VERSION:-$(cargo metadata --no-deps --format-version 1 | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)}"
+for entry in $TARGETS; do
+  target="${entry%%:*}"
+  arch="${entry##*:}"
+  name="frater-${version}-${target}"
+  mkdir -p "dist/${name}"
+  cp "dist/${arch}/frater" "dist/${name}/frater"
+  cp README.md "dist/${name}/"
+  tar -czf "dist/${name}.tar.gz" -C dist "${name}"
+  rm -rf "dist/${name}"
+  (cd dist && sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256")
+done
+"""
+
+[tasks.image]
+description = "Build the container image for both architectures"
+depends = ["dist"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+platforms=""
+for entry in $TARGETS; do
+  platforms="${platforms},linux/${entry##*:}"
+done
+podman build --platform "${platforms#,}" --manifest frater:local .
+"""
+
