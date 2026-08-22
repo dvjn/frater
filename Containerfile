@@ -1,14 +1,15 @@
-# distroless has no shell, so the data directory is prepared in a stage that
-# has one. The stage is pinned to the build platform, because it only makes a
-# directory and its own architecture never reaches the runtime image.
+# scratch has no shell, so the binary and data directory are installed in a
+# stage that has one. The stage is pinned to the build platform, because its
+# own architecture never reaches the runtime image.
 FROM --platform=$BUILDPLATFORM docker.io/library/busybox:1.37.0 AS layout
-RUN install -d -o 65532 -g 65532 -m 0700 /out/data
-
-FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
 ARG TARGETARCH
+COPY dist/${TARGETARCH}/frater /tmp/frater
+RUN install -Dm0555 /tmp/frater /out/usr/local/bin/frater \
+    && install -d -o 65532 -g 65532 -m 0700 /out/data
 
-COPY dist/${TARGETARCH}/frater /usr/local/bin/frater
-COPY --from=layout --chown=65532:65532 /out/data /data
+FROM scratch
+
+COPY --from=layout /out/ /
 
 USER 65532:65532
 WORKDIR /data

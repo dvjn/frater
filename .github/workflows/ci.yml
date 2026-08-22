@@ -64,8 +64,6 @@ jobs:
         with:
           name: dist
           path: dist
-      - name: 🔧 Restore Executable Bit
-        run: chmod +x dist/*/frater
       - name: 🐳 Build Image
         uses: redhat-actions/buildah-build@3a51aade9afa17e5c78256bcbe2e1ee08c7b995b # v3.0.2
         with:

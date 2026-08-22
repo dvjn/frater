@@ -76,8 +76,6 @@ jobs:
         with:
           name: dist
           path: dist
-      - name: 🔧 Restore Executable Bit
-        run: chmod +x dist/*/frater
       - name: 🏷️ Generate Image Tags
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
