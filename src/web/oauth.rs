@@ -185,7 +185,7 @@ pub async fn register(
         issuer,
         redirect_uris: input.redirect_uris,
         client_name: input.client_name,
-        application_type: input.application_type.unwrap_or_else(|| "native".into()),
+        application_type: input.application_type,
         grant_types,
         response_types: input.response_types.unwrap_or(default_response_types),
         scope: input.scope.unwrap_or_else(|| default_scope.into()),

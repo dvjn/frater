@@ -518,7 +518,7 @@ mod tests {
                 issuer: "https://frater.example".into(),
                 redirect_uris: vec![],
                 client_name: Some("TV".into()),
-                application_type: "native".into(),
+                application_type: Some("native".into()),
                 grant_types: vec![DEVICE_GRANT_TYPE.into(), "refresh_token".into()],
                 response_types: vec![],
                 scope: "workouts:read offline_access".into(),
