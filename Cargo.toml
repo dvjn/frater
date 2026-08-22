@@ -22,7 +22,7 @@ hmac = "0.12"
 libc = "0.2"
 maud = { version = "0.27", features = ["axum"] }
 rand = "0.9"
-rand_core = { version = "0.6", features = ["getrandom"] }
+rand_core = { version = "0.10", features = ["getrandom"] }
 rpassword = "7"
 sha2 = "0.10"
 subtle = "2.6"
