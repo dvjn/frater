@@ -17,7 +17,7 @@ axum-extra = { version = "0.10", features = ["cookie"] }
 argon2 = "0.5"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde", "clock"] }
-hkdf = "0.12"
+hkdf = "0.13"
 hmac = "0.12"
 libc = "0.2"
 maud = { version = "0.27", features = ["axum"] }
