@@ -3,7 +3,8 @@
   "packages": {
     ".": {
       "release-type": "rust",
-      "package-name": "frater"
+      "package-name": "frater",
+      "include-component-in-tag": false
     }
   }
 }
