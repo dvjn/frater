@@ -18,7 +18,7 @@ argon2 = "0.5"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde", "clock"] }
 hkdf = "0.12"
-hmac = "0.12"
+hmac = "0.13"
 libc = "0.2"
 maud = { version = "0.27", features = ["axum"] }
 rand = "0.9"
