@@ -1,7 +1,7 @@
 # scratch has no shell, so the binary and data directory are installed in a
 # stage that has one. The stage is pinned to the build platform, because its
 # own architecture never reaches the runtime image.
-FROM --platform=$BUILDPLATFORM docker.io/library/busybox:1.37.0 AS layout
+FROM --platform=$BUILDPLATFORM docker.io/library/busybox:1.37.0@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0 AS layout
 ARG TARGETARCH
 COPY dist/${TARGETARCH}/frater /tmp/frater
 RUN install -Dm0555 /tmp/frater /out/usr/local/bin/frater \
