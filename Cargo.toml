@@ -13,7 +13,7 @@ debug = false
 [dependencies]
 anyhow = "1.0.104"
 axum = "0.8.9"
-axum-extra = { version = "0.10", features = ["cookie"] }
+axum-extra = { version = "0.12", features = ["cookie"] }
 argon2 = "0.5"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde", "clock"] }
