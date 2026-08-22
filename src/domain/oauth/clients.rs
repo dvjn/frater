@@ -25,10 +25,31 @@ pub struct ClientRegistration {
     pub issuer: String,
     pub redirect_uris: Vec<String>,
     pub client_name: Option<String>,
-    pub application_type: String,
+    /// `None` when the client sends no `application_type`. RFC 7591 does not
+    /// define the field, so the type is inferred from the redirect URIs.
+    pub application_type: Option<String>,
     pub grant_types: Vec<String>,
     pub response_types: Vec<String>,
     pub scope: String,
+}
+
+impl ClientRegistration {
+    fn application_type(&self) -> &str {
+        self.application_type
+            .as_deref()
+            .unwrap_or_else(|| infer_application_type(&self.redirect_uris))
+    }
+}
+
+/// A client is native only when every redirect URI is one a native client can
+/// use. Anything else, including an empty list, is a web client.
+fn infer_application_type(redirect_uris: &[String]) -> &'static str {
+    let native = !redirect_uris.is_empty()
+        && redirect_uris.iter().all(|value| {
+            Url::parse(value)
+                .is_ok_and(|url| is_loopback_redirect(&url) || is_private_use_redirect(&url))
+        });
+    if native { "native" } else { "web" }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,6 +102,7 @@ impl OAuthService {
         registration: ClientRegistration,
     ) -> Result<RegisteredClient, DomainError> {
         validate_registration(&registration)?;
+        let application_type = registration.application_type().to_owned();
         let client_id = Uuid::now_v7().to_string();
         let now = self.clock.now().to_rfc3339();
         let grant_types = registration.grant_types.join(" ");
@@ -96,7 +118,7 @@ impl OAuthService {
                     client_id.clone().into(),
                     registration.issuer.clone().into(),
                     registration.client_name.clone().into(),
-                    registration.application_type.clone().into(),
+                    application_type.clone().into(),
                     grant_types.into(),
                     response_types.into(),
                     registration.scope.clone().into(),
@@ -126,7 +148,7 @@ impl OAuthService {
             issuer: registration.issuer,
             redirect_uris: registration.redirect_uris,
             client_name: registration.client_name,
-            application_type: registration.application_type,
+            application_type,
             grant_types: registration.grant_types,
             response_types: registration.response_types,
             scope: registration.scope,
@@ -275,7 +297,7 @@ fn validate_registration(registration: &ClientRegistration) -> Result<(), Domain
     } else {
         registration.response_types.is_empty()
     };
-    if !matches!(registration.application_type.as_str(), "native" | "web")
+    if !matches!(registration.application_type(), "native" | "web")
         || !grants_valid
         || !responses_valid
         || (authorization_code && registration.redirect_uris.is_empty())
@@ -294,7 +316,7 @@ fn validate_registration(registration: &ClientRegistration) -> Result<(), Domain
         validate_redirect_uri(redirect_uri)?;
         let url = Url::parse(redirect_uri)
             .map_err(|_| DomainError::InvalidInput("invalid redirect URI"))?;
-        let valid_for_application = match registration.application_type.as_str() {
+        let valid_for_application = match registration.application_type() {
             "web" => url.scheme() == "https" && url.host_str().is_some(),
             "native" => is_loopback_redirect(&url) || is_private_use_redirect(&url),
             _ => false,
@@ -334,7 +356,7 @@ mod tests {
                         "https://client.example/cb".into()
                     ],
                     client_name: None,
-                    application_type: "web".into(),
+                    application_type: Some("web".into()),
                     grant_types: vec!["authorization_code".into()],
                     response_types: vec!["code".into()],
                     scope: "workouts:read".into(),
@@ -348,7 +370,7 @@ mod tests {
                     issuer: "https://frater.example".into(),
                     redirect_uris: vec!["https://client.example/cb#fragment".into()],
                     client_name: None,
-                    application_type: "web".into(),
+                    application_type: Some("web".into()),
                     grant_types: vec!["authorization_code".into()],
                     response_types: vec!["code".into()],
                     scope: "workouts:read".into(),
@@ -369,5 +391,66 @@ mod tests {
                 .unwrap(),
             "none"
         );
+    }
+
+    #[test]
+    fn application_type_is_inferred_from_redirect_uris() {
+        assert_eq!(
+            infer_application_type(&["https://chatgpt.example/callback".into()]),
+            "web"
+        );
+        assert_eq!(
+            infer_application_type(&["http://127.0.0.1:49152/callback".into()]),
+            "native"
+        );
+        assert_eq!(
+            infer_application_type(&["com.example.client:/callback".into()]),
+            "native"
+        );
+        // One web URI is enough to make the whole client a web client.
+        assert_eq!(
+            infer_application_type(&[
+                "http://127.0.0.1:49152/callback".into(),
+                "https://chatgpt.example/callback".into()
+            ]),
+            "web"
+        );
+        assert_eq!(infer_application_type(&[]), "web");
+    }
+
+    #[tokio::test]
+    async fn hosted_client_registers_without_application_type() {
+        let (_, oauth, _, _, _, _) = setup().await;
+        let client = oauth
+            .register_public_client(ClientRegistration {
+                issuer: "https://frater.example".into(),
+                redirect_uris: vec!["https://chatgpt.example/callback".into()],
+                client_name: Some("ChatGPT".into()),
+                application_type: None,
+                grant_types: vec!["authorization_code".into()],
+                response_types: vec!["code".into()],
+                scope: "workouts:read".into(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(client.application_type(), "web");
+    }
+
+    #[tokio::test]
+    async fn native_client_registers_without_application_type() {
+        let (_, oauth, _, _, _, _) = setup().await;
+        let client = oauth
+            .register_public_client(ClientRegistration {
+                issuer: "https://frater.example".into(),
+                redirect_uris: vec!["http://127.0.0.1:49152/callback".into()],
+                client_name: None,
+                application_type: None,
+                grant_types: vec!["authorization_code".into()],
+                response_types: vec!["code".into()],
+                scope: "workouts:read".into(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(client.application_type(), "native");
     }
 }

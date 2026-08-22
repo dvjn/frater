@@ -998,7 +998,7 @@ mod tests {
                 issuer: ISSUER.into(),
                 redirect_uris: vec!["http://127.0.0.1:49152/callback".into()],
                 client_name: None,
-                application_type: "native".into(),
+                application_type: Some("native".into()),
                 grant_types: vec!["authorization_code".into()],
                 response_types: vec!["code".into()],
                 scope: "workouts:read".into(),

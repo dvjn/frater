@@ -498,7 +498,7 @@ pub(super) mod tests {
                 issuer: "https://frater.example".into(),
                 redirect_uris: vec!["http://127.0.0.1:49152/callback".into()],
                 client_name: Some("Test CLI".into()),
-                application_type: "native".into(),
+                application_type: Some("native".into()),
                 grant_types: vec!["authorization_code".into(), "refresh_token".into()],
                 response_types: vec!["code".into()],
                 scope: "workouts:read offline_access".into(),
