@@ -27,8 +27,8 @@ impl Mailer for LogMailer {
             target: "frater::mail",
             to = %mail.to,
             subject = %mail.subject,
-            body = %mail.body,
-            "MAIL NOT SENT: no SMTP server is configured; the code above is written to the log only"
+            "MAIL NOT SENT: no SMTP server is configured; body={:?}",
+            mail.body
         );
         Ok(())
     }
