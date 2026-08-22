@@ -9,7 +9,7 @@ zig = "0.16.0"
 watchexec = "2.5.1"
 
 [env]
-TARGETS = "x86_64-unknown-linux-gnu:amd64 aarch64-unknown-linux-gnu:arm64"
+TARGETS = "x86_64-unknown-linux-musl:amd64 aarch64-unknown-linux-musl:arm64"
 
 [tasks.dev]
 description = "Start the Axum development server with live reload"

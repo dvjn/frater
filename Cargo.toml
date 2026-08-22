@@ -41,7 +41,7 @@ tower-http = { version = "0.7.0", features = ["trace", "timeout", "compression-g
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 email_address = "0.2.9"
-lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "rustls-native-certs", "pool", "ring"] }
+lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "webpki-roots", "pool", "ring"] }
 async-trait = "0.1.92"
 
 [build-dependencies]
