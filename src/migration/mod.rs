@@ -1,13 +1,17 @@
 use sea_orm_migration::prelude::*;
 
 mod m20260815_000001_initial_schema;
+mod m20260824_000001_expand_implied_scopes;
 
 pub struct Migrator;
 
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(m20260815_000001_initial_schema::Migration)]
+        vec![
+            Box::new(m20260815_000001_initial_schema::Migration),
+            Box::new(m20260824_000001_expand_implied_scopes::Migration),
+        ]
     }
 }
 
