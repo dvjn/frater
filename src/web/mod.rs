@@ -90,9 +90,111 @@ impl AppState {
     }
 }
 
-pub fn router(state: AppState) -> Router {
-    routes()
-        .with_state(state)
+/// The healthcheck router. A container platform or an uptime probe calls it
+/// continuously, so it keeps its own access log target. See
+/// [`crate::access_log`].
+pub fn healthz_router(state: AppState) -> Router {
+    common(
+        Router::new()
+            .route("/healthz", get(health))
+            .with_state(state),
+    )
+}
+
+/// The content-addressed asset router: the stylesheet and the font. These stay
+/// outside the no-store layer so that a client can cache them.
+pub fn asset_router() -> Router {
+    common(
+        Router::new()
+            .route(views::STYLES_PATH, get(styles_css))
+            .route(views::FONT_PATH, get(inter_font))
+            .route(FONT_LICENSE_PATH, get(inter_font_license)),
+    )
+}
+
+/// The browser page router: sign in, registration, password reset and the
+/// account pages.
+pub fn auth_router(state: AppState) -> Router {
+    common(
+        Router::new()
+            .route("/", get(pages::root))
+            .route("/login", get(pages::login_page).post(pages::login_submit))
+            .route("/logout", post(pages::logout_submit))
+            .route(
+                "/register",
+                get(pages::register_page).post(pages::register_submit),
+            )
+            .route("/verify", post(pages::verify_submit))
+            .route(
+                "/reset",
+                get(pages::reset_page).post(pages::reset_request_submit),
+            )
+            .route("/reset/confirm", post(pages::reset_confirm_submit))
+            .route("/account", get(pages::account_page))
+            .route("/account/password", post(pages::account_password_submit))
+            .route(
+                "/account/sessions/{id}/revoke",
+                post(pages::account_session_revoke),
+            )
+            .route(
+                "/account/apps/{client_id}/revoke",
+                post(pages::account_app_revoke),
+            )
+            .layer(middleware::map_response(auth_no_store))
+            .with_state(state),
+    )
+}
+
+/// The OAuth router: the metadata documents, client registration, the device
+/// flow, the authorization endpoint and the token endpoint.
+pub fn oauth_router(state: AppState) -> Router {
+    common(
+        Router::new()
+            .route(
+                "/.well-known/oauth-authorization-server",
+                get(oauth::authorization_server_metadata),
+            )
+            .route(
+                "/.well-known/oauth-protected-resource/mcp",
+                get(oauth::protected_resource_metadata),
+            )
+            .route("/oauth/register", post(oauth::register))
+            .route(
+                "/oauth/device_authorization",
+                post(oauth::device_authorization),
+            )
+            .route(
+                "/oauth/device",
+                get(oauth::device).post(oauth::device_submit),
+            )
+            .route(
+                "/oauth/authorize",
+                get(oauth::authorize).post(oauth::authorize_submit),
+            )
+            .route("/oauth/token", post(oauth::token))
+            .layer(middleware::map_response(auth_no_store))
+            .with_state(state),
+    )
+}
+
+/// Every web subsystem in one router, for the tests. Production code merges the
+/// subsystem routers one at a time in [`crate::app`], so that each one can carry
+/// its own access log layer.
+#[cfg(test)]
+fn router(state: AppState) -> Router {
+    Router::new()
+        .merge(auth_router(state.clone()))
+        .merge(oauth_router(state.clone()))
+        .merge(asset_router())
+        .merge(healthz_router(state))
+}
+
+/// The layers that every web router inherits. Each subsystem router applies
+/// them itself, because after a merge the layers can no longer tell the
+/// subsystems apart.
+fn common(router: Router) -> Router {
+    router
+        .layer(DefaultBodyLimit::max(4 * 1024))
         .layer(tower_http::timeout::TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             std::time::Duration::from_secs(30),
@@ -111,66 +213,6 @@ pub fn router(state: AppState) -> Router {
         )
 }
 
-fn routes() -> Router<AppState> {
-    let auth_routes = Router::new()
-        .route("/", get(pages::root))
-        .route("/login", get(pages::login_page).post(pages::login_submit))
-        .route("/logout", post(pages::logout_submit))
-        .route(
-            "/register",
-            get(pages::register_page).post(pages::register_submit),
-        )
-        .route("/verify", post(pages::verify_submit))
-        .route(
-            "/reset",
-            get(pages::reset_page).post(pages::reset_request_submit),
-        )
-        .route("/reset/confirm", post(pages::reset_confirm_submit))
-        .route("/account", get(pages::account_page))
-        .route("/account/password", post(pages::account_password_submit))
-        .route(
-            "/account/sessions/{id}/revoke",
-            post(pages::account_session_revoke),
-        )
-        .route(
-            "/account/apps/{client_id}/revoke",
-            post(pages::account_app_revoke),
-        )
-        .layer(middleware::map_response(auth_no_store));
-    let oauth_routes = Router::new()
-        .route(
-            "/.well-known/oauth-authorization-server",
-            get(oauth::authorization_server_metadata),
-        )
-        .route(
-            "/.well-known/oauth-protected-resource/mcp",
-            get(oauth::protected_resource_metadata),
-        )
-        .route("/oauth/register", post(oauth::register))
-        .route(
-            "/oauth/device_authorization",
-            post(oauth::device_authorization),
-        )
-        .route(
-            "/oauth/device",
-            get(oauth::device).post(oauth::device_submit),
-        )
-        .route(
-            "/oauth/authorize",
-            get(oauth::authorize).post(oauth::authorize_submit),
-        )
-        .route("/oauth/token", post(oauth::token))
-        .layer(middleware::map_response(auth_no_store));
-    Router::new()
-        .route("/healthz", get(health))
-        // Content-addressed assets stay outside the no-store layers so they can cache.
-        .route(views::STYLES_PATH, get(styles_css))
-        .route(views::FONT_PATH, get(inter_font))
-        .route(FONT_LICENSE_PATH, get(inter_font_license))
-        .merge(auth_routes)
-        .merge(oauth_routes)
-        .layer(DefaultBodyLimit::max(4 * 1024))
-}
 fn inline_hash(text: &str) -> String {
     base64::engine::general_purpose::STANDARD
         .encode(<sha2::Sha256 as sha2::Digest>::digest(text.as_bytes()))

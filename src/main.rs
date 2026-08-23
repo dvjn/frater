@@ -1,3 +1,4 @@
+mod access_log;
 mod app;
 mod config;
 mod db;
@@ -15,16 +16,12 @@ use std::{env, io::Read, sync::Arc};
 use tokio::{net::TcpListener, signal};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .compact()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("frater=info,tower_http=info")),
-        )
+        .with_env_filter(access_log::filter())
         .init();
     if let Command::Bootstrap {
         email,

@@ -1,14 +1,7 @@
-use crate::{
-    domain::Domain,
-    mcp,
-    origin::OriginPolicy,
-    request_id::{self, RequestId},
-    web,
-};
-use axum::{Router, middleware, response::Response};
-use std::{sync::Arc, time::Duration};
+use crate::{access_log, domain::Domain, mcp, origin::OriginPolicy, request_id, web};
+use axum::{Router, middleware};
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-use tower_http::trace::TraceLayer;
 
 pub struct RouterConfig {
     pub public_url: Option<String>,
@@ -27,40 +20,16 @@ pub fn router(
 ) -> Router {
     let origin = OriginPolicy::new(config.public_url);
     let state = AppState { domain, origin };
-    // MCP merges after the timed web router. The ordinary web timeout must not
-    // stop a long-lived SSE response.
+    // Every subsystem keeps its own router, so that one access log layer, and
+    // thus one `RUST_LOG` target, covers exactly that subsystem.
     Router::new()
-        .merge(web::router(state.clone()))
-        .merge(mcp::router(state, cancellation))
-        .layer(
-            TraceLayer::new_for_http()
-                // Headers, cookies and the query string can carry credentials,
-                // authorization codes and tokens. Thus the span records only the
-                // method, the path and the protocol version.
-                .make_span_with(|request: &axum::http::Request<_>| {
-                    tracing::info_span!(
-                        "request",
-                        method = %request.method(),
-                        path = request.uri().path(),
-                        version = ?request.version(),
-                        request_id = request
-                            .extensions()
-                            .get::<RequestId>()
-                            .map(RequestId::as_str)
-                            .unwrap_or_default(),
-                    )
-                })
-                .on_request(())
-                .on_response(
-                    |response: &Response<_>, latency: Duration, _span: &tracing::Span| {
-                        tracing::info!(
-                            status = response.status().as_u16(),
-                            latency_ms = latency.as_millis() as u64,
-                            "request completed"
-                        );
-                    },
-                ),
-        )
+        .merge(web::auth_router(state.clone()).layer(access_log::layer!(access_log::AUTH)))
+        .merge(web::oauth_router(state.clone()).layer(access_log::layer!(access_log::OAUTH)))
+        .merge(web::asset_router().layer(access_log::layer!(access_log::ASSETS)))
+        .merge(web::healthz_router(state.clone()).layer(access_log::layer!(access_log::HEALTHZ)))
+        // MCP carries no web timeout. The ordinary timeout must not stop a
+        // long-lived SSE response.
+        .merge(mcp::router(state, cancellation).layer(access_log::layer!(access_log::MCP)))
         // The id layer stays outermost, so the span, the handler and the error
         // body all read the same value.
         .layer(middleware::from_fn(request_id::propagate))
@@ -77,6 +46,7 @@ mod tests {
         },
         migration::Migrator,
     };
+    use axum::response::Response;
     use axum::{
         body::Body,
         http::{HeaderValue, Request, StatusCode, header},
@@ -86,6 +56,7 @@ mod tests {
     use sea_orm_migration::MigratorTrait;
     use serde_json::{Value, json};
     use sha2::{Digest, Sha256};
+    use std::time::Duration;
     use tower::ServiceExt;
 
     fn local_config() -> RouterConfig {
