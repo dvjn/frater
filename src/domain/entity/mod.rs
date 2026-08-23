@@ -1,6 +1,7 @@
 // Persistence models are intentionally private to the domain layer.
 pub(super) mod auth_one_time_tokens;
 pub(super) mod auth_sessions;
+pub(super) mod bodyweight_readings;
 pub(super) mod equipment;
 pub(super) mod exercise_equipment;
 pub(super) mod exercise_muscles;

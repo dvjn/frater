@@ -13,6 +13,7 @@ pub struct Model {
     pub reps: Option<i64>,
     pub hold_sec: Option<i64>,
     pub load_g: i64,
+    pub notes: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

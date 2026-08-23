@@ -580,8 +580,8 @@ mod tests {
             .iter()
             .map(|tool| tool["name"].as_str().unwrap())
             .collect::<std::collections::HashSet<_>>();
-        // The token holds workouts:read and catalogue:read, so only the read
-        // tools are offered. Every write tool is filtered out of discovery.
+        // The token holds workouts:read and catalogue:read, so every write tool
+        // is filtered out of discovery.
         let expected = [
             "list_muscles",
             "get_muscle",
@@ -589,16 +589,12 @@ mod tests {
             "get_equipment",
             "list_exercises",
             "get_exercise",
-            "list_workout_sessions",
+            "resolve_exercises",
+            "list_workouts",
             "get_workout_session",
-            "list_session_exercises",
-            "get_session_exercise",
-            "list_exercise_sets",
-            "get_exercise_set",
-            "workout_history",
             "exercise_history",
             "personal_records",
-            "volume_stats",
+            "list_bodyweight",
         ]
         .into_iter()
         .collect::<std::collections::HashSet<_>>();
@@ -649,7 +645,7 @@ mod tests {
         assert_eq!(denied_write["result"]["isError"], true);
         assert_eq!(
             denied_write["result"]["structuredContent"]["error"],
-            "insufficient_scope"
+            "forbidden"
         );
         assert_eq!(
             denied_write["result"]["structuredContent"]["message"],
@@ -668,7 +664,7 @@ mod tests {
         .await;
         assert_eq!(
             denied_catalogue["result"]["structuredContent"]["error"],
-            "insufficient_scope"
+            "forbidden"
         );
         assert_eq!(
             denied_catalogue["result"]["structuredContent"]["message"],

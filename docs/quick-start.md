@@ -73,7 +73,7 @@ Talk to your agent:
 
 > What did I lift last Tuesday?
 
-> Repeat my last workout, but add a set.
+> Correct yesterday's squat session: the top set was 62.5 kg, not 60 kg.
 
 To find out what else you can ask for:
 

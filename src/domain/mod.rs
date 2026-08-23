@@ -1,5 +1,6 @@
 mod account;
 mod auth;
+mod bodyweight;
 mod catalogue;
 mod entity;
 mod error;
@@ -19,7 +20,10 @@ pub use account::AccountService;
 #[cfg(test)]
 pub(crate) use auth::Identity;
 pub use auth::{AuthConfig, AuthService, Principal, SessionSummary, bootstrap_superuser};
-pub use catalogue::{ExerciseInput, Lookup, NamedInput, PageRequest};
+pub use bodyweight::{BodyweightFilter, LogBodyweight, MAX_BODYWEIGHT_G};
+pub use catalogue::{
+    ExerciseInput, ExerciseMuscleInput, Lookup, MAX_EXERCISE_ASSOCIATIONS, NamedInput, PageRequest,
+};
 pub use error::DomainError;
 #[cfg(test)]
 pub(crate) use mailer::tests::{CapturingMailer, extract_code};
@@ -32,9 +36,8 @@ pub use oauth::{
 };
 pub use secrets::Password;
 pub use workouts::{
-    AddExerciseSet, AddSessionExercise, CreateWorkoutSession, LogWorkout, LogWorkoutExercise,
-    RepeatLastWorkout, SessionFilter, StatsRange, Timestamp, UpdateExerciseSet,
-    UpdateSessionExercise, UpdateWorkoutSession, VolumeGrouping,
+    AddExerciseSet, CreateWorkoutSession, LogWorkout, LogWorkoutExercise, ReplaceRun,
+    SessionFilter, StatsRange, Timestamp,
 };
 
 #[cfg(test)]

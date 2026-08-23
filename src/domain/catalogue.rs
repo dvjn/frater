@@ -10,6 +10,7 @@ use uuid::Uuid;
 use super::{
     Domain,
     auth::Principal,
+    bodyweight::MAX_BODYWEIGHT_SHARE,
     entity::{equipment, exercise_equipment, exercise_muscles, exercises, muscles},
     error::DomainError,
 };
@@ -84,16 +85,11 @@ pub struct ExerciseMuscleInput {
 pub struct ExerciseInput {
     pub name: String,
     pub contraction_type: String,
+    pub bodyweight_share: i64,
     #[serde(default)]
     pub muscles: Vec<ExerciseMuscleInput>,
     #[serde(default)]
     pub equipment_ids: Vec<Uuid>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct ExerciseMuscle {
-    pub muscle: Muscle,
-    pub role: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -108,7 +104,9 @@ pub struct Exercise {
     pub id: Uuid,
     pub name: String,
     pub contraction_type: String,
-    pub muscles: Vec<ExerciseMuscle>,
+    pub bodyweight_share: i64,
+    pub primary_muscles: Vec<Muscle>,
+    pub secondary_muscles: Vec<Muscle>,
     pub equipment: Vec<Equipment>,
 }
 
@@ -173,6 +171,11 @@ fn validate_exercise(input: &ExerciseInput) -> Result<String, DomainError> {
     }
     if !matches!(input.contraction_type.as_str(), "dynamic" | "isometric") {
         return Err(DomainError::InvalidInput("invalid contraction_type"));
+    }
+    if !(0..=MAX_BODYWEIGHT_SHARE).contains(&input.bodyweight_share) {
+        return Err(DomainError::InvalidInput(
+            "bodyweight_share must be between 0 and 100",
+        ));
     }
     let mut muscles = HashSet::new();
     for association in &input.muscles {
@@ -533,19 +536,23 @@ impl Domain {
         if muscle_links.len() > MAX_EXERCISE_ASSOCIATIONS {
             return Err(DomainError::Conflict);
         }
-        let mut muscle_views = Vec::with_capacity(muscle_links.len());
+        let mut primary_muscles = Vec::new();
+        let mut secondary_muscles = Vec::new();
         for link in muscle_links {
+            let role = link.role;
             let muscle = muscles::Entity::find_by_id(link.muscle_id)
                 .one(connection)
                 .await?
                 .ok_or(DomainError::NotFound)?;
-            muscle_views.push(ExerciseMuscle {
-                muscle: Muscle {
-                    id: parse_id(&muscle.id)?,
-                    name: muscle.name,
-                },
-                role: link.role,
-            });
+            let view = Muscle {
+                id: parse_id(&muscle.id)?,
+                name: muscle.name,
+            };
+            if role == "primary" {
+                primary_muscles.push(view);
+            } else {
+                secondary_muscles.push(view);
+            }
         }
         let equipment_links = exercise_equipment::Entity::find()
             .filter(exercise_equipment::Column::ExerciseId.eq(model.id.clone()))
@@ -567,18 +574,17 @@ impl Domain {
                 name: item.name,
             });
         }
-        muscle_views.sort_by(|a, b| {
-            a.role
-                .cmp(&b.role)
-                .then_with(|| a.muscle.name.cmp(&b.muscle.name))
-                .then_with(|| a.muscle.id.cmp(&b.muscle.id))
-        });
+        let by_name = |a: &Muscle, b: &Muscle| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id));
+        primary_muscles.sort_by(by_name);
+        secondary_muscles.sort_by(by_name);
         equipment_views.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
         Ok(Exercise {
             id: parse_id(&model.id)?,
             name: model.name,
             contraction_type: model.contraction_type,
-            muscles: muscle_views,
+            bodyweight_share: model.bodyweight_share,
+            primary_muscles,
+            secondary_muscles,
             equipment: equipment_views,
         })
     }
@@ -596,6 +602,7 @@ impl Domain {
             id: Set(id.to_string()),
             name: Set(name),
             contraction_type: Set(input.contraction_type.clone()),
+            bodyweight_share: Set(input.bodyweight_share),
         }
         .insert(&tx)
         .await
@@ -628,6 +635,7 @@ impl Domain {
         let mut active: exercises::ActiveModel = model.into();
         active.name = Set(name);
         active.contraction_type = Set(input.contraction_type.clone());
+        active.bodyweight_share = Set(input.bodyweight_share);
         active.update(&tx).await.map_err(mutation_error)?;
         exercise_muscles::Entity::delete_many()
             .filter(exercise_muscles::Column::ExerciseId.eq(id.to_string()))
@@ -713,9 +721,8 @@ mod tests {
     use super::*;
     use crate::{
         domain::{
-            AddSessionExercise, AuthConfig, CreateWorkoutSession, OAuthConfig,
+            AuthConfig, LogWorkout, LogWorkoutExercise, OAuthConfig,
             auth::{Identity, OAuthPrincipal, PrincipalTransport},
-            workouts::CreateActivity,
         },
         migration::Migrator,
     };
@@ -795,6 +802,7 @@ mod tests {
         ExerciseInput {
             name: name.into(),
             contraction_type: "dynamic".into(),
+            bodyweight_share: 0,
             muscles: vec![ExerciseMuscleInput {
                 muscle_id,
                 role: "primary".into(),
@@ -849,8 +857,8 @@ mod tests {
             .create_exercise(&admin, exercise_input("Squat", muscle.id, equipment.id))
             .await
             .unwrap();
-        assert_eq!(exercise.muscles[0].muscle.name, "Quadriceps");
-        assert_eq!(exercise.muscles[0].role, "primary");
+        assert_eq!(exercise.primary_muscles[0].name, "Quadriceps");
+        assert!(exercise.secondary_muscles.is_empty());
         assert_eq!(exercise.equipment[0].name, "Olympic bar");
         let updated = domain
             .update_exercise(
@@ -859,6 +867,7 @@ mod tests {
                 ExerciseInput {
                     name: "Paused squat".into(),
                     contraction_type: "isometric".into(),
+                    bodyweight_share: 0,
                     muscles: vec![ExerciseMuscleInput {
                         muscle_id: muscle.id,
                         role: "secondary".into(),
@@ -870,7 +879,8 @@ mod tests {
             .unwrap();
         assert_eq!(updated.name, "Paused squat");
         assert_eq!(updated.contraction_type, "isometric");
-        assert_eq!(updated.muscles[0].role, "secondary");
+        assert!(updated.primary_muscles.is_empty());
+        assert_eq!(updated.secondary_muscles[0].name, "Quadriceps");
         assert!(updated.equipment.is_empty());
 
         assert!(matches!(
@@ -887,6 +897,7 @@ mod tests {
         let duplicate_muscles = ExerciseInput {
             name: "Duplicate muscle".into(),
             contraction_type: "dynamic".into(),
+            bodyweight_share: 0,
             muscles: vec![
                 ExerciseMuscleInput {
                     muscle_id: muscle.id,
@@ -906,6 +917,7 @@ mod tests {
         let duplicate_equipment = ExerciseInput {
             name: "Duplicate equipment".into(),
             contraction_type: "dynamic".into(),
+            bodyweight_share: 0,
             muscles: vec![],
             equipment_ids: vec![equipment.id, equipment.id],
         };
@@ -957,6 +969,7 @@ mod tests {
         let input = ExerciseInput {
             name: "Fully associated".into(),
             contraction_type: "dynamic".into(),
+            bodyweight_share: 0,
             muscles: muscle_ids
                 .iter()
                 .map(|id| ExerciseMuscleInput {
@@ -967,12 +980,13 @@ mod tests {
             equipment_ids: equipment_ids.clone(),
         };
         let exercise = domain.create_exercise(&admin, input).await.unwrap();
-        assert_eq!(exercise.muscles.len(), 100);
+        assert_eq!(exercise.primary_muscles.len(), 100);
         assert_eq!(exercise.equipment.len(), 100);
 
         let too_many_muscles = ExerciseInput {
             name: "Too many muscles".into(),
             contraction_type: "dynamic".into(),
+            bodyweight_share: 0,
             muscles: (0..=MAX_EXERCISE_ASSOCIATIONS)
                 .map(|_| ExerciseMuscleInput {
                     muscle_id: Uuid::now_v7(),
@@ -988,6 +1002,7 @@ mod tests {
         let too_many_equipment = ExerciseInput {
             name: "Too much equipment".into(),
             contraction_type: "dynamic".into(),
+            bodyweight_share: 0,
             muscles: vec![],
             equipment_ids: (0..=MAX_EXERCISE_ASSOCIATIONS)
                 .map(|_| Uuid::now_v7())
@@ -1178,7 +1193,7 @@ mod tests {
         ));
         let unchanged = domain.get_exercise(original.id).await.unwrap();
         assert_eq!(unchanged.name, "Squat");
-        assert_eq!(unchanged.muscles[0].muscle.id, muscle.id);
+        assert_eq!(unchanged.primary_muscles[0].id, muscle.id);
         assert_eq!(unchanged.equipment[0].id, equipment.id);
     }
 
@@ -1217,23 +1232,17 @@ mod tests {
         ));
 
         let session = domain
-            .create_session(
+            .log_workout(
                 &admin,
-                CreateWorkoutSession {
+                LogWorkout {
                     started_at: crate::domain::Timestamp::parse("2026-01-01T00:00:00Z").unwrap(),
                     label: None,
-                    activity: CreateActivity::Strength,
-                },
-            )
-            .await
-            .unwrap();
-        domain
-            .add_session_exercise(
-                &admin,
-                session.id,
-                AddSessionExercise {
-                    exercise_id: exercise.id,
-                    position: None,
+                    notes: None,
+                    exercises: vec![LogWorkoutExercise {
+                        exercise_id: exercise.id,
+                        notes: None,
+                        sets: vec![],
+                    }],
                 },
             )
             .await
@@ -1257,6 +1266,7 @@ mod tests {
                 ExerciseInput {
                     name: "Back squat".into(),
                     contraction_type: "dynamic".into(),
+                    bodyweight_share: 0,
                     muscles: vec![],
                     equipment_ids: vec![],
                 },
@@ -1269,6 +1279,7 @@ mod tests {
                 ExerciseInput {
                     name: "Back extension".into(),
                     contraction_type: "dynamic".into(),
+                    bodyweight_share: 0,
                     muscles: vec![],
                     equipment_ids: vec![],
                 },
@@ -1373,6 +1384,7 @@ mod tests {
                     ExerciseInput {
                         name: "Denied".into(),
                         contraction_type: "dynamic".into(),
+                        bodyweight_share: 0,
                         muscles: vec![],
                         equipment_ids: vec![]
                     }

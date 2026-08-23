@@ -2,6 +2,8 @@ use sea_orm_migration::prelude::*;
 
 mod m20260815_000001_initial_schema;
 mod m20260824_000001_expand_implied_scopes;
+mod m20260824_000002_add_notes;
+mod m20260824_000003_add_bodyweight;
 
 pub struct Migrator;
 
@@ -11,6 +13,8 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20260815_000001_initial_schema::Migration),
             Box::new(m20260824_000001_expand_implied_scopes::Migration),
+            Box::new(m20260824_000002_add_notes::Migration),
+            Box::new(m20260824_000003_add_bodyweight::Migration),
         ]
     }
 }
@@ -41,6 +45,7 @@ mod tests {
             "session_exercises",
             "exercise_sets",
             "runs",
+            "bodyweight_readings",
         ];
 
         Migrator::up(&db, None).await.unwrap();
