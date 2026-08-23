@@ -1,11 +1,11 @@
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use zeroize::Zeroize;
 
 type HmacSha256 = Hmac<Sha256>;
 
 pub(super) fn hmac_digest(key: &[u8], domain: &[u8], selector: &[u8], secret: &[u8]) -> [u8; 32] {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(key).expect("HMAC accepts any key");
+    let mut mac = <HmacSha256 as KeyInit>::new_from_slice(key).expect("HMAC accepts any key");
     mac.update(domain);
     mac.update(selector);
     mac.update(secret);
