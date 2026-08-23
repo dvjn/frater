@@ -24,7 +24,7 @@ use std::{collections::HashSet, net::IpAddr, sync::Arc, time::Duration};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
-use rand::RngCore;
+use rand::Rng;
 use sea_orm::{
     ColumnTrait, DatabaseConnection, DatabaseTransaction, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,

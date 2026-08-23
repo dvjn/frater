@@ -21,7 +21,10 @@ hkdf = "0.13"
 hmac = "0.13"
 libc = "0.2"
 maud = { version = "0.27", features = ["axum"] }
-rand = "0.9"
+rand = "0.10"
+# Supplies OsRng to argon2 SaltString::generate. argon2 0.5 uses rand_core
+# 0.6, so this must stay on 0.6 until argon2 0.6 is stable. The getrandom
+# feature is what makes OsRng available; argon2 does not enable it.
 rand_core = { version = "0.6", features = ["getrandom"] }
 rpassword = "7"
 sha2 = "0.11"
