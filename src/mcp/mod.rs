@@ -48,7 +48,7 @@ impl McpServer {
             domain,
             tool_router: ToolRouter::new(),
         };
-        for (name, description) in TOOL_SPECS {
+        for (name, description, _) in TOOL_SPECS {
             let tool = Tool::new(*name, *description, schema_for_tool(name));
             server.tool_router.add_route(ToolRoute::new_dyn(
                 tool,

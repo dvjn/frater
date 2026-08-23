@@ -197,150 +197,189 @@ pub(super) struct UpdateExerciseSetArg {
     pub(super) input: UpdateExerciseSet,
 }
 
-pub(super) const TOOL_SPECS: &[(&str, &str)] = &[
+/// Name, description, and the one scope the tool needs. The scope is data, not
+/// a rule inferred from the name, so adding a tool cannot silently give it the
+/// wrong scope. `list_tools` filters on it and `dispatch_tool` enforces it.
+pub(super) const TOOL_SPECS: &[(&str, &str, &str)] = &[
     (
         "list_muscles",
         "Search the muscle catalogue by name. Input: optional query, offset, limit. Returns {items:[{id,name}], next_offset}. Needs the catalogue:read scope.",
+        "catalogue:read",
     ),
     (
         "get_muscle",
         "Look up one muscle by id or name; names are case-insensitive and may be a unique prefix. Returns {id,name}. Needs the catalogue:read scope.",
+        "catalogue:read",
     ),
     (
         "create_muscle",
         "Add a muscle to the shared catalogue. Input: name. Returns {id,name}. Needs the catalogue:write scope and the superuser role.",
+        "catalogue:write",
     ),
     (
         "update_muscle",
         "Rename a muscle. Input: id, name. Returns {id,name}. Needs the catalogue:write scope and the superuser role.",
+        "catalogue:write",
     ),
     (
         "delete_muscle",
         "Delete a muscle that no exercise uses. Input: id. Returns {deleted,id}. Needs the catalogue:write scope and the superuser role.",
+        "catalogue:write",
     ),
     (
         "list_equipment",
         "Search the equipment catalogue by name. Input: optional query, offset, limit. Returns {items:[{id,name}], next_offset}. Needs the catalogue:read scope.",
+        "catalogue:read",
     ),
     (
         "get_equipment",
         "Look up one equipment item by id or name; names are case-insensitive and may be a unique prefix. Returns {id,name}. Needs the catalogue:read scope.",
+        "catalogue:read",
     ),
     (
         "create_equipment",
         "Add equipment to the shared catalogue. Input: name. Returns {id,name}. Needs the catalogue:write scope and the superuser role.",
+        "catalogue:write",
     ),
     (
         "update_equipment",
         "Rename an equipment item. Input: id, name. Returns {id,name}. Needs the catalogue:write scope and the superuser role.",
+        "catalogue:write",
     ),
     (
         "delete_equipment",
         "Delete equipment that no exercise uses. Input: id. Returns {deleted,id}. Needs the catalogue:write scope and the superuser role.",
+        "catalogue:write",
     ),
     (
         "list_exercises",
         "Find exercises by name before logging a workout. Input: optional query, offset, limit. Returns {items:[{id,name,contraction_type}], next_offset}. Needs the catalogue:read scope.",
+        "catalogue:read",
     ),
     (
         "get_exercise",
         "Get one exercise with its muscles and equipment. Input: id or name. Returns {id,name,contraction_type,muscles,equipment}. Needs the catalogue:read scope.",
+        "catalogue:read",
     ),
     (
         "create_exercise",
         "Add an exercise and its muscle and equipment links in one atomic call. Input: name, contraction_type, optional muscles and equipment_ids. Needs the catalogue:write scope and the superuser role.",
+        "catalogue:write",
     ),
     (
         "update_exercise",
         "Replace an exercise and all of its links in one atomic call. Input: id, name, contraction_type, muscles, equipment_ids. Needs the catalogue:write scope and the superuser role.",
+        "catalogue:write",
     ),
     (
         "delete_exercise",
         "Delete an exercise that no session uses. Input: id. Returns {deleted,id}. Needs the catalogue:write scope and the superuser role.",
+        "catalogue:write",
     ),
     (
         "list_workout_sessions",
         "List your sessions, newest first, filtered by date and activity. Dates accept YYYY-MM-DD. Returns {items:[{id,started_at,label,activity_type}], next_offset}. Use workout_history for totals.",
+        "workouts:read",
     ),
     (
         "get_workout_session",
         "Read one of your sessions in full, with every exercise and set. Input: id. Returns the session with nested exercises and sets.",
+        "workouts:read",
     ),
     (
         "create_workout_session",
         "Create an empty strength session or a run. Input: started_at (YYYY-MM-DD or RFC 3339), optional label, activity. To record a complete strength workout in one call use log_workout instead. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "update_workout_session",
         "Change the date, label, or activity of one of your sessions. Changing the activity type deletes the previous activity detail. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "delete_workout_session",
         "Delete one of your sessions with all of its exercises and sets. Input: id. Returns {deleted,id}. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "list_session_exercises",
         "List the ordered exercises of one of your sessions without their sets. Input: session_id, offset, limit.",
+        "workouts:read",
     ),
     (
         "get_session_exercise",
         "Read one exercise of your session with its ordered sets. Input: id.",
+        "workouts:read",
     ),
     (
         "add_session_exercise",
         "Append or insert an exercise in one of your strength sessions. Input: session_id, exercise (id or name), optional position. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "update_session_exercise",
         "Replace or reorder an exercise inside your session. Input: id, exercise (id or name), position. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "remove_session_exercise",
         "Remove one exercise and its sets from your session. Input: id. Returns {deleted,id}. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "list_exercise_sets",
         "List the ordered sets of one exercise in your session. Input: session_exercise_id, offset, limit.",
+        "workouts:read",
     ),
     (
         "get_exercise_set",
         "Read one of your recorded sets. Input: id.",
+        "workouts:read",
     ),
     (
         "add_exercise_set",
         "Add one set to an exercise in your session. Dynamic exercises need reps, isometric exercises need hold_sec. load_g is grams. For unilateral (per-side or per-arm) exercises, one set covers both sides: reps counts the repetitions of one side, and load_g is the load one side moves. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "update_exercise_set",
         "Correct or reorder one of your recorded sets. Input: id, position, set_type, reps or hold_sec, load_g. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "remove_exercise_set",
         "Remove one of your recorded sets. Input: id. Returns {deleted,id}. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "log_workout",
         "Record a finished strength workout in one atomic call: session, exercises, and sets together. Input: started_at (YYYY-MM-DD or RFC 3339), optional label, exercises[{exercise (id or name), sets[]}]. Nothing is stored if any part is invalid. Prefer this over create_workout_session plus add_* calls. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "repeat_last_workout",
         "Start a new session pre-filled from the user's most recent strength session, copying its sets as targets. Input: started_at, optional label, optional like_label to repeat the latest session whose label contains that text. Needs the workouts:write scope.",
+        "workouts:write",
     ),
     (
         "workout_history",
         "Summarise the user's sessions in a date range, newest first. Input: optional from and to (YYYY-MM-DD), optional limit. Returns per session: id, started_at, label, activity_type, exercise_count, set_count, volume_g.",
+        "workouts:read",
     ),
     (
         "exercise_history",
         "Track how one exercise progressed over time. Input: exercise (id or name), optional from and to, optional limit. Returns each performance, newest first, with its sets and estimated 1RM in grams.",
+        "workouts:read",
     ),
     (
         "personal_records",
         "Report best efforts: heaviest set, best estimated one-repetition maximum (Epley), and longest hold. Input: optional exercise (id or name), optional from and to. Loads in grams.",
+        "workouts:read",
     ),
     (
         "volume_stats",
         "Compare training volume (load times reps, in grams) over a date range. Input: group_by ('exercise' or 'muscle'), optional from and to. Muscle grouping counts the primary muscle of each exercise.",
+        "workouts:read",
     ),
 ];
 
@@ -554,12 +593,20 @@ mod tests {
     #[test]
     fn tool_surface_is_complete_and_schemas_reject_unknown_fields() {
         assert_eq!(TOOL_SPECS.len(), 36);
+        // A scope the OAuth layer would reject can never be granted, so a tool
+        // carrying one would be unreachable rather than merely misconfigured.
+        for (name, _, scope) in TOOL_SPECS {
+            assert!(
+                crate::domain::resource_scopes().contains(scope),
+                "tool {name} needs {scope}, which is not a resource scope"
+            );
+        }
         let names = TOOL_SPECS
             .iter()
-            .map(|(name, _)| *name)
+            .map(|(name, _, _)| *name)
             .collect::<std::collections::HashSet<_>>();
         assert_eq!(names.len(), 36);
-        for (name, _) in TOOL_SPECS {
+        for (name, _, _) in TOOL_SPECS {
             let schema = schema_for_tool(name);
             assert_eq!(schema.get("type"), Some(&json!("object")));
             assert_eq!(schema.get("additionalProperties"), Some(&json!(false)));

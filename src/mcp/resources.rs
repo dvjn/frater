@@ -5,9 +5,9 @@ use rmcp::{
     ErrorData, RoleServer, ServerHandler,
     model::{
         CacheScope, Implementation, ListResourceTemplatesResult, ListResourcesResult,
-        PaginatedRequestParams, ProtocolVersion, ReadResourceRequestParams, ReadResourceResponse,
-        ReadResourceResult, Resource, ResourceContents, ResourceTemplate, ServerCapabilities,
-        ServerInfo,
+        ListToolsResult, PaginatedRequestParams, ProtocolVersion, ReadResourceRequestParams,
+        ReadResourceResponse, ReadResourceResult, Resource, ResourceContents, ResourceTemplate,
+        ServerCapabilities, ServerInfo,
     },
     service::RequestContext,
     tool_handler,
@@ -15,7 +15,7 @@ use rmcp::{
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::domain::{DomainError, PageRequest, Principal, SessionFilter};
+use crate::domain::{DomainError, PageRequest, Principal, SCOPES, SessionFilter};
 
 use super::{McpServer, SUPPORTED_PROTOCOL_VERSIONS};
 
@@ -43,34 +43,65 @@ impl ServerHandler for McpServer {
             .with_instructions(instructions)
     }
 
+    /// Bounded by the caller's scope so that a missing scope shows up as an
+    /// absent tool, not as an error part way through a task. `dispatch_tool`
+    /// checks every call: this filter is for discovery, never for enforcement.
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, ErrorData> {
+        let principal = require_resource_principal(&context, &SCOPES)?;
+        let tools = self
+            .tool_router
+            .list_all()
+            .into_iter()
+            .filter(|tool| {
+                super::tools::required_scope(&tool.name).is_some_and(|scope| {
+                    principal
+                        .oauth()
+                        .is_some_and(|context| context.has_scope(scope))
+                })
+            })
+            .collect();
+        // Private: the list varies by token, so one caller's list must never be
+        // served to another.
+        Ok(ListToolsResult::with_all_items(tools)
+            .with_ttl_ms(0)
+            .with_cache_scope(CacheScope::Private))
+    }
+
     async fn list_resources(
         &self,
         _request: Option<PaginatedRequestParams>,
         context: RequestContext<RoleServer>,
     ) -> Result<ListResourcesResult, ErrorData> {
-        require_resource_principal(&context, &["workouts:read", "catalogue:read"])?;
-        Ok(private_resources(vec![
-            resource(
-                "frater://catalogue/muscles",
-                "muscles",
-                "Muscle catalogue (first page)",
-            ),
-            resource(
-                "frater://catalogue/equipment",
-                "equipment",
-                "Equipment catalogue (first page)",
-            ),
-            resource(
-                "frater://catalogue/exercises",
-                "exercises",
-                "Exercise catalogue summaries (first page; use item resources for associations)",
-            ),
-            resource(
-                "frater://workouts/sessions",
-                "workout_sessions",
-                "Your workout session summaries (first page)",
-            ),
-        ]))
+        let principal = require_resource_principal(&context, &["workouts:read", "catalogue:read"])?;
+        Ok(private_resources(retain_permitted(
+            &principal,
+            vec![
+                resource(
+                    "frater://catalogue/muscles",
+                    "muscles",
+                    "Muscle catalogue (first page)",
+                ),
+                resource(
+                    "frater://catalogue/equipment",
+                    "equipment",
+                    "Equipment catalogue (first page)",
+                ),
+                resource(
+                    "frater://catalogue/exercises",
+                    "exercises",
+                    "Exercise catalogue summaries (first page; use item resources for associations)",
+                ),
+                resource(
+                    "frater://workouts/sessions",
+                    "workout_sessions",
+                    "Your workout session summaries (first page)",
+                ),
+            ],
+        )))
     }
 
     async fn list_resource_templates(
@@ -78,29 +109,32 @@ impl ServerHandler for McpServer {
         _request: Option<PaginatedRequestParams>,
         context: RequestContext<RoleServer>,
     ) -> Result<ListResourceTemplatesResult, ErrorData> {
-        require_resource_principal(&context, &["workouts:read", "catalogue:read"])?;
-        Ok(private_templates(vec![
-            template(
-                "frater://catalogue/muscles/{id}",
-                "muscle",
-                "A muscle catalogue item",
-            ),
-            template(
-                "frater://catalogue/equipment/{id}",
-                "equipment_item",
-                "An equipment catalogue item",
-            ),
-            template(
-                "frater://catalogue/exercises/{id}",
-                "exercise",
-                "An exercise and its muscle/equipment associations",
-            ),
-            template(
-                "frater://workouts/sessions/{id}",
-                "workout_session",
-                "One owned workout session with its complete hierarchy",
-            ),
-        ]))
+        let principal = require_resource_principal(&context, &["workouts:read", "catalogue:read"])?;
+        Ok(private_templates(retain_permitted_templates(
+            &principal,
+            vec![
+                template(
+                    "frater://catalogue/muscles/{id}",
+                    "muscle",
+                    "A muscle catalogue item",
+                ),
+                template(
+                    "frater://catalogue/equipment/{id}",
+                    "equipment_item",
+                    "An equipment catalogue item",
+                ),
+                template(
+                    "frater://catalogue/exercises/{id}",
+                    "exercise",
+                    "An exercise and its muscle/equipment associations",
+                ),
+                template(
+                    "frater://workouts/sessions/{id}",
+                    "workout_session",
+                    "One owned workout session with its complete hierarchy",
+                ),
+            ],
+        )))
     }
 
     async fn read_resource(
@@ -196,6 +230,33 @@ fn resource_scope(uri: &str) -> &'static str {
     } else {
         "workouts:read"
     }
+}
+
+/// `read_resource` checks the same scope per URI, so this only stops a client
+/// being offered a resource that it cannot read.
+fn retain_permitted(principal: &Principal, resources: Vec<Resource>) -> Vec<Resource> {
+    resources
+        .into_iter()
+        .filter(|item| {
+            principal
+                .oauth()
+                .is_some_and(|context| context.has_scope(resource_scope(&item.uri)))
+        })
+        .collect()
+}
+
+fn retain_permitted_templates(
+    principal: &Principal,
+    templates: Vec<ResourceTemplate>,
+) -> Vec<ResourceTemplate> {
+    templates
+        .into_iter()
+        .filter(|item| {
+            principal
+                .oauth()
+                .is_some_and(|context| context.has_scope(resource_scope(&item.uri_template)))
+        })
+        .collect()
 }
 
 fn require_resource_principal(
