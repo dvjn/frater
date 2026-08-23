@@ -22,7 +22,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::domain::{Domain, Principal};
 
-use schemas::{TOOL_SPECS, schema_for_tool};
+use schemas::{TOOL_SPECS, output_schema_for_tool, schema_for_tool};
 
 /// The one protocol revision this server serves. The list bounds what
 /// `initialize` may agree to, so every offer gets 2026-07-28 back: per the MCP
@@ -49,7 +49,8 @@ impl McpServer {
             tool_router: ToolRouter::new(),
         };
         for (name, description, _) in TOOL_SPECS {
-            let tool = Tool::new(*name, *description, schema_for_tool(name));
+            let tool = Tool::new(*name, *description, schema_for_tool(name))
+                .with_raw_output_schema(Arc::new(output_schema_for_tool(name)));
             server.tool_router.add_route(ToolRoute::new_dyn(
                 tool,
                 |mut context: ToolCallContext<'_, Self>| {

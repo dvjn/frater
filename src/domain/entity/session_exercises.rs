@@ -11,6 +11,7 @@ pub struct Model {
     pub activity_type: String,
     pub contraction_type: String,
     pub position: i64,
+    pub notes: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -55,3 +55,4 @@ tower = { version = "0.5.3", features = ["util"] }
 rmcp = { version = "3.1.2", default-features = false, features = ["client", "transport-streamable-http-client"] }
 futures = "0.3"
 sse-stream = "0.2.4"
+jsonschema = { version = "0.51.0", default-features = false }

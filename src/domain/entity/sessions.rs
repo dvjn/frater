@@ -9,6 +9,7 @@ pub struct Model {
     pub started_at: String,
     pub activity_type: String,
     pub label: Option<String>,
+    pub notes: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

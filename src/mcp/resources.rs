@@ -7,7 +7,7 @@ use rmcp::{
         CacheScope, Implementation, ListResourceTemplatesResult, ListResourcesResult,
         ListToolsResult, PaginatedRequestParams, ProtocolVersion, ReadResourceRequestParams,
         ReadResourceResponse, ReadResourceResult, Resource, ResourceContents, ResourceTemplate,
-        ServerCapabilities, ServerInfo,
+        ServerCapabilities, ServerInfo, Tool,
     },
     service::RequestContext,
     tool_handler,
@@ -43,32 +43,25 @@ impl ServerHandler for McpServer {
             .with_instructions(instructions)
     }
 
-    /// Bounded by the caller's scope so that a missing scope shows up as an
-    /// absent tool, not as an error part way through a task. `dispatch_tool`
-    /// checks every call: this filter is for discovery, never for enforcement.
+    /// Bounded by the caller's scope, so that a missing scope shows up as an
+    /// absent tool and not as an error part way through a task, and by the
+    /// tool's audience, so that the agent sees the atomic tools rather than the
+    /// low-level ones that share their scope. `dispatch_tool` checks every
+    /// call: this filter is for discovery, never for enforcement, and a tool it
+    /// hides stays callable by name.
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
         context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
         let principal = require_resource_principal(&context, &SCOPES)?;
-        let tools = self
-            .tool_router
-            .list_all()
-            .into_iter()
-            .filter(|tool| {
-                super::tools::required_scope(&tool.name).is_some_and(|scope| {
-                    principal
-                        .oauth()
-                        .is_some_and(|context| context.has_scope(scope))
-                })
-            })
-            .collect();
         // Private: the list varies by token, so one caller's list must never be
         // served to another.
-        Ok(ListToolsResult::with_all_items(tools)
-            .with_ttl_ms(0)
-            .with_cache_scope(CacheScope::Private))
+        Ok(
+            ListToolsResult::with_all_items(self.discoverable_tools(&principal))
+                .with_ttl_ms(0)
+                .with_cache_scope(CacheScope::Private),
+        )
     }
 
     async fn list_resources(
@@ -221,6 +214,25 @@ impl ServerHandler for McpServer {
         .with_ttl_ms(0)
         .with_cache_scope(CacheScope::Private)
         .into())
+    }
+}
+
+impl McpServer {
+    /// The same rule `dispatch_tool` enforces, so a listed tool is never one
+    /// the call would refuse. Reusing the rule keeps the two from drifting.
+    pub(super) fn discoverable_tools(&self, principal: &Principal) -> Vec<Tool> {
+        self.tool_router
+            .list_all()
+            .into_iter()
+            .filter(|tool| {
+                super::tools::required_scope(&tool.name).is_some_and(|scope| {
+                    principal
+                        .oauth()
+                        .is_some_and(|context| context.has_scope(scope))
+                        && (scope != "catalogue:write" || principal.role() == "superuser")
+                })
+            })
+            .collect()
     }
 }
 
