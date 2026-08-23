@@ -38,6 +38,38 @@ use zeroize::Zeroize;
 use super::{Clock, error::DomainError};
 
 pub const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
+
+/// The order is the order the discovery metadata advertises, so entries are
+/// appended rather than inserted.
+pub const SCOPES: [&str; 5] = [
+    "workouts:read",
+    "workouts:write",
+    "catalogue:read",
+    "catalogue:write",
+    "offline_access",
+];
+
+/// Governs refresh tokens, not resource access, so the resource metadata and a
+/// registration without the refresh grant both exclude it.
+pub const OFFLINE_ACCESS: &str = "offline_access";
+
+pub fn resource_scopes() -> Vec<&'static str> {
+    SCOPES
+        .into_iter()
+        .filter(|scope| *scope != OFFLINE_ACCESS)
+        .collect()
+}
+
+/// The full set, because a registered scope is only a ceiling that consent then
+/// narrows. Anything less would cap a client that sends no scope, with no way
+/// for the user to widen it later.
+pub fn default_registration_scope(refresh_token_grant: bool) -> String {
+    SCOPES
+        .into_iter()
+        .filter(|scope| refresh_token_grant || *scope != OFFLINE_ACCESS)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
 const TOKEN_PREFIX: &str = "ft_at1";
 const TOKEN_DOMAIN: &[u8] = b"frater/oauth-access-token/v1\0";
 const MAX_URI_LEN: usize = 2048;
@@ -236,15 +268,7 @@ fn validate_scope(scope: &str) -> Result<(), DomainError> {
     }
     let mut unique = HashSet::new();
     for item in scope.split(' ') {
-        if !matches!(
-            item,
-            "workouts:read"
-                | "workouts:write"
-                | "catalogue:read"
-                | "catalogue:write"
-                | "offline_access"
-        ) || !unique.insert(item)
-        {
+        if !SCOPES.contains(&item) || !unique.insert(item) {
             return Err(DomainError::InvalidInput("invalid scope"));
         }
     }
@@ -611,6 +635,17 @@ pub(super) mod tests {
         assert!(validate_scope("workouts:read frater:read").is_err());
         assert!(validate_code_verifier(&"a".repeat(43)).is_ok());
         assert!(validate_code_verifier("short").is_err());
+        // A scope advertised but not accepted would be unusable.
+        assert!(validate_scope(&SCOPES.join(" ")).is_ok());
+        assert!(validate_scope(&resource_scopes().join(" ")).is_ok());
+        assert!(!resource_scopes().contains(&OFFLINE_ACCESS));
+        assert_eq!(default_registration_scope(true), SCOPES.join(" "));
+        assert_eq!(
+            default_registration_scope(false),
+            resource_scopes().join(" ")
+        );
+        assert!(validate_scope(&default_registration_scope(true)).is_ok());
+        assert!(validate_scope(&default_registration_scope(false)).is_ok());
         for token in ["", "ft_ac1.a.b", "ft_at1.a.b.extra", "ft_at1.a.b="] {
             assert!(parse_opaque_value(token, TOKEN_PREFIX).is_err());
         }
