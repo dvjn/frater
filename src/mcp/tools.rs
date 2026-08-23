@@ -33,14 +33,10 @@ impl McpServer {
                 "authenticated OAuth principal required",
             ));
         };
-        let required_scope = if is_catalogue_mutation(name) {
-            "catalogue:write"
-        } else if is_workout_mutation(name) {
-            "workouts:write"
-        } else if is_catalogue_read(name) {
-            "catalogue:read"
-        } else {
-            "workouts:read"
+        // An unauthenticated caller must not learn which tool names exist, so
+        // this stays behind the principal check above.
+        let Some(required_scope) = required_scope(name) else {
+            return Ok(tool_error("not_found", "tool not found"));
         };
         if !principal
             .oauth()
@@ -51,7 +47,7 @@ impl McpServer {
                 &format!("{required_scope} scope required"),
             ));
         }
-        if is_catalogue_mutation(name) && principal.role() != "superuser" {
+        if required_scope == "catalogue:write" && principal.role() != "superuser" {
             return Ok(tool_error(
                 "forbidden",
                 "catalogue mutation requires the superuser role",
@@ -480,48 +476,13 @@ fn domain_tool_error(tool: &str, error: DomainError) -> CallToolResult {
     }
 }
 
-fn is_catalogue_mutation(name: &str) -> bool {
-    matches!(
-        name,
-        "create_muscle"
-            | "update_muscle"
-            | "delete_muscle"
-            | "create_equipment"
-            | "update_equipment"
-            | "delete_equipment"
-            | "create_exercise"
-            | "update_exercise"
-            | "delete_exercise"
-    )
-}
-
-fn is_catalogue_read(name: &str) -> bool {
-    matches!(
-        name,
-        "list_muscles"
-            | "get_muscle"
-            | "list_equipment"
-            | "get_equipment"
-            | "list_exercises"
-            | "get_exercise"
-    )
-}
-
-fn is_workout_mutation(name: &str) -> bool {
-    matches!(
-        name,
-        "create_workout_session"
-            | "update_workout_session"
-            | "delete_workout_session"
-            | "add_session_exercise"
-            | "update_session_exercise"
-            | "remove_session_exercise"
-            | "add_exercise_set"
-            | "update_exercise_set"
-            | "remove_exercise_set"
-            | "log_workout"
-            | "repeat_last_workout"
-    )
+/// `None` for a name the table does not hold. An earlier version fell back to
+/// the least privileged scope, which let a typo dispatch as a workout read.
+pub(super) fn required_scope(name: &str) -> Option<&'static str> {
+    super::schemas::TOOL_SPECS
+        .iter()
+        .find(|(spec_name, _, _)| *spec_name == name)
+        .map(|(_, _, scope)| *scope)
 }
 
 #[cfg(test)]
@@ -535,7 +496,7 @@ mod tests {
     #[tokio::test]
     async fn every_advertised_tool_dispatches_and_rejects_unknown_arguments() {
         let (server, _, _, superuser, _) = server_fixture().await;
-        for (name, _) in TOOL_SPECS {
+        for (name, _, _) in TOOL_SPECS {
             let arguments = serde_json::from_value(json!({"definitely_unknown": true})).unwrap();
             let result = server
                 .dispatch_tool(name, arguments, Some(superuser.clone()))
