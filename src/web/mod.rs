@@ -1497,9 +1497,11 @@ mod tests {
         .unwrap();
         assert!(registration.get("client_secret").is_none());
         assert_eq!(registration["token_endpoint_auth_method"], "none");
+        // A client that sends no scope gets the write scopes too, so a hosted
+        // connector is not silently capped at read-only.
         assert_eq!(
             registration["scope"],
-            "workouts:read catalogue:read offline_access"
+            "workouts:read workouts:write catalogue:read catalogue:write offline_access"
         );
         let client_id = registration["client_id"].as_str().unwrap();
 
@@ -1765,11 +1767,15 @@ mod tests {
         assert!(consent_body.contains("Authorize access"));
         assert!(consent_body.contains("CLI"));
         assert!(consent_body.contains(client_id));
-        assert!(consent_body.contains("workouts:read"));
-        assert!(consent_body.contains("Read workouts"));
-        assert!(consent_body.contains("Read catalogue"));
+        // A write scope covers its read scope, so the grant collapses to the
+        // write scopes alone. This fixture signs in a superuser, so the
+        // catalogue write survives the role filter.
+        assert!(consent_body.contains("workouts:write"));
+        assert!(consent_body.contains("Manage workouts"));
+        assert!(consent_body.contains("catalogue:write"));
+        assert!(consent_body.contains("Manage catalogue"));
         assert!(consent_body.contains("Stay connected"));
-        assert!(!consent_body.contains("Manage catalogue"));
+        assert!(!consent_body.contains("Read catalogue"));
         assert!(consent_body.contains("http://127.0.0.1:49152/callback"));
 
         let malformed_consent = app
@@ -3097,8 +3103,8 @@ mod tests {
         assert!(html.contains("Studio"));
         assert!(html.contains(&client_id));
         for text in [
-            "workouts:read",
-            "Read workouts",
+            "workouts:write",
+            "Manage workouts",
             "offline_access",
             "Stay connected",
         ] {

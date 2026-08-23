@@ -168,10 +168,13 @@ pub async fn register(
     let grant_types = input
         .grant_types
         .unwrap_or_else(|| vec!["authorization_code".into()]);
+    // A client that sends no scope, as hosted connectors do, still needs to
+    // write. The registered scope is only a ceiling: consent decides what the
+    // user grants, and catalogue:write stays limited to a superuser.
     let default_scope = if grant_types.iter().any(|grant| grant == "refresh_token") {
-        "workouts:read catalogue:read offline_access"
+        "workouts:read workouts:write catalogue:read catalogue:write offline_access"
     } else {
-        "workouts:read catalogue:read"
+        "workouts:read workouts:write catalogue:read catalogue:write"
     };
     let default_response_types = if grant_types
         .iter()
