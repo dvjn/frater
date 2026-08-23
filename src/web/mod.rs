@@ -15,7 +15,7 @@ use axum::{
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use error::WebError;
-use rand::RngCore;
+use rand::Rng;
 use serde::Serialize;
 use std::sync::LazyLock;
 use subtle::ConstantTimeEq;

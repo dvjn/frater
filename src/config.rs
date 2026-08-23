@@ -10,7 +10,7 @@ use crate::domain::{AuthConfig, OAuthConfig, SmtpSettings};
 use anyhow::{Context, Result, bail};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use hkdf::Hkdf;
-use rand::RngCore;
+use rand::Rng;
 use sha2::Sha256;
 use url::Url;
 use zeroize::Zeroizing;
