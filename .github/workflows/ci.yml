@@ -3,12 +3,14 @@ name: 🔁 CI
 on:
   push:
     branches: [main]
-  # No branch filter. A stacked pull request targets its parent branch rather
-  # than main, and a filtered trigger skips it without reporting anything.
   pull_request:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -28,8 +30,18 @@ jobs:
         run: mise run check
 
   dist:
-    name: 🏗️ Build Binaries
+    name: 🏗️ Build ${{ matrix.arch }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            arch: amd64
+          - target: aarch64-unknown-linux-musl
+            arch: arm64
+    env:
+      BUILD_TARGETS: ${{ matrix.target }}:${{ matrix.arch }}
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,13 +50,13 @@ jobs:
       - name: 📦 Cache Rust Build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          key: dist
+          key: dist-${{ matrix.arch }}
       - name: 🏗️ Build and Package
         run: mise run package
       - name: ⬆️ Upload Artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: dist
+          name: dist-${{ matrix.arch }}
           path: |
             dist/*/frater
             dist/*.tar.gz
@@ -63,7 +75,8 @@ jobs:
       - name: ⬇️ Download Binaries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: dist
+          pattern: dist-*
+          merge-multiple: true
           path: dist
       - name: 🐳 Build Image
         uses: redhat-actions/buildah-build@3a51aade9afa17e5c78256bcbe2e1ee08c7b995b # v3.0.2
