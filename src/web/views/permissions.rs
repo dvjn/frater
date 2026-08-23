@@ -2,9 +2,8 @@ use maud::{Markup, html};
 
 use crate::domain::{granted_scope, scope_allows};
 
-/// This table is the only description of the permission system: a new scope or
-/// role rule needs one row here and nothing else. The domain holds the
-/// implications between the scopes.
+/// Labels and role rules only. `domain::SCOPES` is the authority on what a scope
+/// may be, and the domain holds the implications between them.
 struct Permission {
     scope: &'static str,
     label: &'static str,

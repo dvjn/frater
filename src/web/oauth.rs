@@ -57,7 +57,7 @@ pub struct AuthorizationServerMetadata {
     grant_types_supported: [&'static str; 3],
     token_endpoint_auth_methods_supported: [&'static str; 1],
     code_challenge_methods_supported: [&'static str; 1],
-    scopes_supported: [&'static str; 5],
+    scopes_supported: Vec<&'static str>,
     authorization_response_iss_parameter_supported: bool,
     resource_parameter_supported: bool,
 }
@@ -79,13 +79,7 @@ pub async fn authorization_server_metadata(
         grant_types_supported: ["authorization_code", "refresh_token", DEVICE_GRANT_TYPE],
         token_endpoint_auth_methods_supported: ["none"],
         code_challenge_methods_supported: ["S256"],
-        scopes_supported: [
-            "workouts:read",
-            "workouts:write",
-            "catalogue:read",
-            "catalogue:write",
-            "offline_access",
-        ],
+        scopes_supported: crate::domain::SCOPES.to_vec(),
         authorization_response_iss_parameter_supported: true,
         resource_parameter_supported: true,
     })
@@ -96,7 +90,7 @@ pub async fn authorization_server_metadata(
 pub struct ProtectedResourceMetadata {
     resource: String,
     authorization_servers: Vec<String>,
-    scopes_supported: [&'static str; 4],
+    scopes_supported: Vec<&'static str>,
     bearer_methods_supported: [&'static str; 1],
 }
 
@@ -110,12 +104,7 @@ pub async fn protected_resource_metadata(
     Json(ProtectedResourceMetadata {
         resource: format!("{origin}/mcp"),
         authorization_servers: vec![origin],
-        scopes_supported: [
-            "workouts:read",
-            "workouts:write",
-            "catalogue:read",
-            "catalogue:write",
-        ],
+        scopes_supported: crate::domain::resource_scopes(),
         bearer_methods_supported: ["header"],
     })
     .into_response()
@@ -168,11 +157,9 @@ pub async fn register(
     let grant_types = input
         .grant_types
         .unwrap_or_else(|| vec!["authorization_code".into()]);
-    let default_scope = if grant_types.iter().any(|grant| grant == "refresh_token") {
-        "workouts:read catalogue:read offline_access"
-    } else {
-        "workouts:read catalogue:read"
-    };
+    let default_scope = crate::domain::default_registration_scope(
+        grant_types.iter().any(|grant| grant == "refresh_token"),
+    );
     let default_response_types = if grant_types
         .iter()
         .any(|grant| grant == "authorization_code")
@@ -188,7 +175,7 @@ pub async fn register(
         application_type: input.application_type,
         grant_types,
         response_types: input.response_types.unwrap_or(default_response_types),
-        scope: input.scope.unwrap_or_else(|| default_scope.into()),
+        scope: input.scope.unwrap_or(default_scope),
     };
     match state
         .domain
