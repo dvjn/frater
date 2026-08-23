@@ -1766,14 +1766,13 @@ mod tests {
         assert!(consent_body.contains("Authorize access"));
         assert!(consent_body.contains("CLI"));
         assert!(consent_body.contains(client_id));
-        // A write scope covers its read scope, so the read rows collapse away.
         // This fixture signs in a superuser, so catalogue:write survives.
         assert!(consent_body.contains("workouts:write"));
-        assert!(consent_body.contains("Manage workouts"));
+        assert!(consent_body.contains("Edit workouts"));
         assert!(consent_body.contains("catalogue:write"));
-        assert!(consent_body.contains("Manage catalogue"));
+        assert!(consent_body.contains("Edit catalogue"));
         assert!(consent_body.contains("Stay connected"));
-        assert!(!consent_body.contains("Read catalogue"));
+        assert!(consent_body.contains("View catalogue"));
         assert!(consent_body.contains("http://127.0.0.1:49152/callback"));
 
         let malformed_consent = app
@@ -2109,9 +2108,9 @@ mod tests {
             .unwrap();
         let consent = std::str::from_utf8(&consent).unwrap();
         assert!(consent.contains("Living room"));
-        assert!(consent.contains("Read workouts"));
+        assert!(consent.contains("View workouts"));
         assert!(consent.contains("Stay connected"));
-        assert!(!consent.contains("Manage catalogue"));
+        assert!(!consent.contains("Edit catalogue"));
         assert!(consent.contains(resource));
 
         let allow = url::form_urlencoded::Serializer::new(String::new())
@@ -2894,22 +2893,22 @@ mod tests {
             "https://127.0.0.1:3000",
             &cookies,
             &csrf,
-            "workouts:read workouts:write catalogue:write offline_access",
+            "workouts:read workouts:write catalogue:read catalogue:write offline_access",
         )
         .await;
-        assert!(consent.contains("Manage workouts"));
-        assert!(consent.contains("Manage catalogue"));
+        assert!(consent.contains("Edit workouts"));
+        assert!(consent.contains("Edit catalogue"));
         assert!(consent.contains("Stay connected"));
-        assert!(!consent.contains("Read workouts"));
+        assert!(consent.contains("View workouts"));
         assert_eq!(
             issued["scope"],
-            "workouts:write catalogue:write offline_access"
+            "workouts:write workouts:read catalogue:write catalogue:read offline_access"
         );
         assert!(issued["refresh_token"].is_string());
     }
 
     #[tokio::test]
-    async fn a_write_only_request_grants_the_write_scope_alone() {
+    async fn a_read_and_a_write_are_granted_side_by_side() {
         let (app, _domain) =
             application_parts(OriginPolicy::new(Some("https://127.0.0.1:3000".into()))).await;
         let host = "127.0.0.1:3000";
@@ -2920,12 +2919,12 @@ mod tests {
             "https://127.0.0.1:3000",
             &cookies,
             &csrf,
-            "workouts:write",
+            "workouts:read workouts:write",
         )
         .await;
-        assert!(consent.contains("Manage workouts"));
+        assert!(consent.contains("Edit workouts"));
         assert!(!consent.contains("Stay connected"));
-        assert_eq!(issued["scope"], "workouts:write");
+        assert_eq!(issued["scope"], "workouts:write workouts:read");
         assert!(issued["refresh_token"].is_null());
     }
 
@@ -2986,15 +2985,15 @@ mod tests {
             "http://127.0.0.1:3000",
             &cookies,
             &csrf,
-            "workouts:read workouts:write catalogue:write offline_access",
+            "workouts:read workouts:write catalogue:read catalogue:write offline_access",
         )
         .await;
-        assert!(!consent.contains("Manage catalogue"));
-        assert!(consent.contains("Read catalogue"));
-        assert!(consent.contains("Manage workouts"));
+        assert!(!consent.contains("Edit catalogue"));
+        assert!(consent.contains("View catalogue"));
+        assert!(consent.contains("Edit workouts"));
         assert_eq!(
             issued["scope"],
-            "workouts:write catalogue:read offline_access"
+            "workouts:write workouts:read catalogue:read offline_access"
         );
         assert!(issued["refresh_token"].is_string());
     }
@@ -3102,7 +3101,7 @@ mod tests {
         assert!(html.contains(&client_id));
         for text in [
             "workouts:write",
-            "Manage workouts",
+            "Edit workouts",
             "offline_access",
             "Stay connected",
         ] {

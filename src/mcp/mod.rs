@@ -175,12 +175,12 @@ mod test_support {
             test_oauth_principal(
                 admin_id,
                 "user",
-                "workouts:read workouts:write catalogue:write",
+                "workouts:read workouts:write catalogue:read catalogue:write",
             ),
             test_oauth_principal(
                 super_id,
                 "superuser",
-                "workouts:read workouts:write catalogue:write",
+                "workouts:read workouts:write catalogue:read catalogue:write",
             ),
             read_id,
         )
