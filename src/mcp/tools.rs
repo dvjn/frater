@@ -693,8 +693,11 @@ mod tests {
             "catalogue:read scope required"
         );
 
-        let catalogue_writer =
-            test_oauth_principal(read_only.user_id(), "user", "workouts:read catalogue:write");
+        let catalogue_writer = test_oauth_principal(
+            read_only.user_id(),
+            "user",
+            "workouts:read catalogue:read catalogue:write",
+        );
         let listed = server
             .dispatch_tool("list_muscles", JsonObject::new(), Some(catalogue_writer))
             .await

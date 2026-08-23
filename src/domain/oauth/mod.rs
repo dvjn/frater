@@ -272,46 +272,24 @@ fn validate_scope(scope: &str) -> Result<(), DomainError> {
             return Err(DomainError::InvalidInput("invalid scope"));
         }
     }
-    if !unique.contains("workouts:read") && !unique.contains("workouts:write") {
+    if !unique.contains("workouts:read") {
         return Err(DomainError::InvalidInput("invalid scope"));
     }
     Ok(())
 }
 
 pub fn scope_allows(granted: &str, required: &str) -> bool {
-    granted.split(' ').any(|item| item_allows(item, required))
-}
-
-fn item_allows(granted: &str, required: &str) -> bool {
-    let (Some((granted_resource, granted_action)), Some((required_resource, required_action))) =
-        (granted.split_once(':'), required.split_once(':'))
-    else {
-        return granted == required;
-    };
-    let action_allows = granted_action == required_action
-        || (granted_action == "write" && required_action == "read");
-    action_allows
-        && (required_resource == granted_resource
-            || required_resource
-                .strip_prefix(granted_resource)
-                .is_some_and(|rest| rest.starts_with('.')))
+    granted.split(' ').any(|item| item == required)
 }
 
 pub fn normalize_scope(scope: &str) -> String {
-    let items: Vec<&str> = scope.split(' ').filter(|item| !item.is_empty()).collect();
-    items
-        .iter()
-        .enumerate()
-        .filter(|(index, item)| {
-            !items.iter().enumerate().any(|(other_index, other)| {
-                other_index != *index
-                    && item_allows(other, item)
-                    && (!item_allows(item, other) || other_index < *index)
-            })
-        })
-        .map(|(_, item)| *item)
-        .collect::<Vec<_>>()
-        .join(" ")
+    let mut items: Vec<&str> = Vec::new();
+    for item in scope.split(' ').filter(|item| !item.is_empty()) {
+        if !items.contains(&item) {
+            items.push(item);
+        }
+    }
+    items.join(" ")
 }
 
 pub fn consent_scope(scope: &str, role: &str) -> String {
@@ -629,6 +607,7 @@ pub(super) mod tests {
         assert!(validate_scope("workouts:read workouts:write").is_ok());
         assert!(validate_scope("workouts:read catalogue:write").is_ok());
         assert!(validate_scope("workouts:read catalogue:read").is_ok());
+        assert!(validate_scope("workouts:write").is_err());
         assert!(validate_scope("catalogue:read").is_err());
         assert!(validate_scope("workouts:read workouts:read").is_err());
         assert!(validate_scope("workouts:read  workouts:write").is_err());
@@ -652,21 +631,16 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn granted_scopes_cover_descendant_resources_only() {
+    fn a_grant_allows_the_exact_scopes_that_it_names() {
         assert!(scope_allows("workouts:read", "workouts:read"));
-        assert!(scope_allows("workouts:write", "workouts.sets:write"));
         assert!(scope_allows(
-            "workouts:read catalogue:write",
+            "workouts:read catalogue:read catalogue:write",
             "catalogue:write"
         ));
         assert!(!scope_allows("workouts:write", "workoutsx:write"));
-        assert!(!scope_allows("workouts:write", "workoutsx:read"));
-        assert!(scope_allows("workouts:write", "workouts:read"));
-        assert!(scope_allows("catalogue:write", "catalogue:read"));
+        assert!(!scope_allows("workouts:write", "workouts:read"));
         assert!(!scope_allows("catalogue:read", "catalogue:write"));
-        assert!(scope_allows("workouts:write", "workouts.sets:read"));
         assert!(!scope_allows("workouts:read", "workouts:write"));
-        assert!(!scope_allows("workouts.sets:write", "workouts:write"));
         assert!(!scope_allows("offline_access", "workouts:read"));
         assert!(!scope_allows("workouts:read", "offline_access"));
         assert!(scope_allows(
@@ -683,18 +657,24 @@ pub(super) mod tests {
             consent_scope(requested, "user"),
             "workouts:read workouts:write offline_access"
         );
-        assert!(validate_scope(&consent_scope("workouts:read catalogue:write", "user")).is_ok());
+        assert!(
+            validate_scope(&consent_scope(
+                "workouts:read catalogue:read catalogue:write",
+                "user"
+            ))
+            .is_ok()
+        );
     }
 
     #[test]
-    fn normalization_drops_implied_scopes() {
+    fn normalization_drops_only_a_repeated_scope() {
         assert_eq!(
             normalize_scope("workouts:read workouts:write offline_access"),
-            "workouts:write offline_access"
+            "workouts:read workouts:write offline_access"
         );
         assert_eq!(
-            normalize_scope("workouts:write workouts.sets:read"),
-            "workouts:write"
+            normalize_scope("workouts:read workouts:write workouts:read"),
+            "workouts:read workouts:write"
         );
         assert_eq!(
             normalize_scope("workouts:read offline_access"),
@@ -704,11 +684,12 @@ pub(super) mod tests {
 
     #[test]
     fn consent_issues_only_the_selected_permissions() {
-        let requested = "workouts:read workouts:write catalogue:write offline_access";
+        let requested =
+            "workouts:read workouts:write catalogue:read catalogue:write offline_access";
         let all: Vec<String> = requested.split(' ').map(ToOwned::to_owned).collect();
         assert_eq!(
             granted_scope(requested, &all, "superuser").as_deref(),
-            Some("workouts:write catalogue:write offline_access")
+            Some(requested)
         );
         assert_eq!(
             granted_scope(requested, &["workouts:read".to_owned()], "user").as_deref(),
@@ -770,23 +751,24 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn consent_narrows_a_write_only_request_to_read() {
+    fn a_grant_always_needs_the_workouts_read_scope() {
+        let requested = "workouts:read workouts:write";
         assert_eq!(
-            granted_scope("workouts:write", &["workouts:read".to_owned()], "user").as_deref(),
+            granted_scope(requested, &["workouts:read".to_owned()], "user").as_deref(),
             Some("workouts:read")
         );
         assert_eq!(
-            granted_scope("workouts:write", &["workouts:write".to_owned()], "user").as_deref(),
-            Some("workouts:write")
-        );
-        assert_eq!(
             granted_scope(
-                "workouts:write",
-                &["workouts:write".to_owned(), "workouts:read".to_owned()],
+                requested,
+                &["workouts:read".to_owned(), "workouts:write".to_owned()],
                 "user"
             )
             .as_deref(),
-            Some("workouts:write")
+            Some("workouts:read workouts:write")
+        );
+        assert_eq!(
+            granted_scope(requested, &["workouts:write".to_owned()], "user"),
+            None
         );
         assert_eq!(
             granted_scope("workouts:read", &["workouts:write".to_owned()], "user"),

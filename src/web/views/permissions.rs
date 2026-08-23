@@ -3,7 +3,7 @@ use maud::{Markup, html};
 use crate::domain::{granted_scope, scope_allows};
 
 /// Labels and role rules only. `domain::SCOPES` is the authority on what a scope
-/// may be, and the domain holds the implications between them.
+/// may be.
 struct Permission {
     scope: &'static str,
     label: &'static str,
@@ -13,22 +13,22 @@ struct Permission {
 const REGISTRY: [Permission; 5] = [
     Permission {
         scope: "workouts:write",
-        label: "Manage workouts",
+        label: "Edit workouts",
         requires_role: None,
     },
     Permission {
         scope: "workouts:read",
-        label: "Read workouts",
+        label: "View workouts",
         requires_role: None,
     },
     Permission {
         scope: "catalogue:write",
-        label: "Manage catalogue",
+        label: "Edit catalogue",
         requires_role: Some("superuser"),
     },
     Permission {
         scope: "catalogue:read",
-        label: "Read catalogue",
+        label: "View catalogue",
         requires_role: None,
     },
     Permission {
@@ -150,19 +150,20 @@ mod tests {
 
     #[test]
     fn a_grant_holds_every_requested_scope_that_the_role_can_hold() {
-        let requested = "workouts:read workouts:write catalogue:write offline_access";
+        let requested =
+            "workouts:read workouts:write catalogue:read catalogue:write offline_access";
         assert_eq!(
             consent_grant(requested, "superuser").as_deref(),
-            Some("workouts:write catalogue:write offline_access")
+            Some("workouts:write workouts:read catalogue:write catalogue:read offline_access")
         );
     }
 
     #[test]
     fn a_regular_user_never_grants_a_catalogue_write() {
-        let requested = "workouts:write catalogue:write";
+        let requested = "workouts:read workouts:write catalogue:read catalogue:write";
         assert_eq!(
             consent_grant(requested, "user").as_deref(),
-            Some("workouts:write catalogue:read")
+            Some("workouts:write workouts:read catalogue:read")
         );
     }
 
@@ -185,7 +186,7 @@ mod tests {
 
     #[test]
     fn only_a_known_scope_carries_a_label() {
-        assert_eq!(permission_label("workouts:write"), Some("Manage workouts"));
+        assert_eq!(permission_label("workouts:write"), Some("Edit workouts"));
         assert_eq!(permission_label("reports:read"), None);
     }
 }
