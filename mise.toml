@@ -6,7 +6,7 @@ zig = "0.16.0"
 # the full release tag of cargo-audit.
 "github:rustsec/rustsec" = { version = "cargo-audit/v0.22.2", exe = "cargo-audit" }
 "github:rust-cross/cargo-zigbuild" = { version = "0.23.3", exe = "cargo-zigbuild" }
-watchexec = "2.6.1"
+watchexec = "2.7.0"
 
 [env]
 TARGETS = "{{ env.BUILD_TARGETS | default(value='x86_64-unknown-linux-musl:amd64 aarch64-unknown-linux-musl:arm64') }}"
