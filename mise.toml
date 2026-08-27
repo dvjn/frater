@@ -5,7 +5,7 @@ zig = "0.16.0"
 # tool compiles from source. The rustsec repo is a monorepo, so the version is
 # the full release tag of cargo-audit.
 "github:rustsec/rustsec" = { version = "cargo-audit/v0.22.2", exe = "cargo-audit" }
-"github:rust-cross/cargo-zigbuild" = { version = "0.23.0", exe = "cargo-zigbuild" }
+"github:rust-cross/cargo-zigbuild" = { version = "0.23.3", exe = "cargo-zigbuild" }
 watchexec = "2.6.1"
 
 [env]
