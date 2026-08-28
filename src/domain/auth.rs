@@ -1,13 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use argon2::{
-    Algorithm, Argon2, Params, Version,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-};
+use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use rand::Rng;
-use rand_core::OsRng;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait,
     QueryFilter, QueryOrder, Set, Statement, TransactionTrait, sea_query::Expr,
@@ -168,7 +164,7 @@ fn argon(pepper: &[u8]) -> Argon2<'_> {
 // Verification uses the parameters encoded in a PHC string. Check them before
 // invoking Argon2 so a corrupt or malicious database value cannot request
 // unbounded CPU or memory.
-fn has_expected_argon_parameters(hash: &PasswordHash<'_>) -> bool {
+fn has_expected_argon_parameters(hash: &PasswordHash) -> bool {
     hash.algorithm.as_str() == "argon2id"
         && hash.version == Some(19)
         && hash.params.iter().count() == 3
@@ -193,7 +189,7 @@ impl AuthService {
         let pepper = Zeroizing::new(config.password_pepper.clone());
         let dummy_hash = tokio::task::spawn_blocking(move || {
             argon(&pepper)
-                .hash_password(b"fixed-invalid-password", &SaltString::generate(&mut OsRng))
+                .hash_password(b"fixed-invalid-password")
                 .map(|v| v.to_string())
         })
         .await
@@ -635,7 +631,7 @@ pub(super) async fn hash_password(
     let pepper = Zeroizing::new(pepper.to_vec());
     tokio::task::spawn_blocking(move || {
         argon(&pepper)
-            .hash_password(&password, &SaltString::generate(&mut OsRng))
+            .hash_password(&password)
             .map(|v| v.to_string())
     })
     .await
@@ -729,7 +725,7 @@ mod tests {
     #[test]
     fn rejects_argon_hashes_with_unexpected_work_factors() {
         let valid = argon(b"test pepper")
-            .hash_password(b"password", &SaltString::generate(&mut OsRng))
+            .hash_password(b"password")
             .unwrap()
             .to_string();
         let parsed = PasswordHash::new(&valid).unwrap();
