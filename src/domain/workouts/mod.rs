@@ -15,6 +15,7 @@ pub use log::{LogWorkout, LogWorkoutExercise, ReplaceRun};
 
 pub const MAX_SESSION_EXERCISES: usize = 100;
 pub const MAX_EXERCISE_SETS: usize = 100;
+pub const MAX_RUN_SPLITS: usize = 100;
 pub const MAX_NOTES: usize = 1_000;
 
 pub const TIMESTAMP_HINT: &str = "expected YYYY-MM-DD (for example 2026-08-16) or an RFC 3339 timestamp (for example 2026-08-16T07:30:00Z)";
@@ -88,11 +89,22 @@ pub struct CreateWorkoutSession {
 pub enum CreateActivity {
     Strength,
     Run {
-        distance_m: i64,
-        duration_sec: i64,
+        #[serde(default)]
+        distance_m: Option<i64>,
+        #[serde(default)]
+        duration_sec: Option<i64>,
         #[serde(default)]
         elevation_gain_m: i64,
+        #[serde(default)]
+        splits: Vec<RunSplit>,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RunSplit {
+    pub distance_m: i64,
+    pub duration_sec: i64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -123,6 +135,7 @@ pub enum ActivityView {
         distance_m: i64,
         duration_sec: i64,
         elevation_gain_m: i64,
+        splits: Vec<RunSplit>,
     },
 }
 
@@ -178,6 +191,65 @@ fn validate_notes(notes: Option<&String>) -> Result<(), DomainError> {
         ));
     }
     Ok(())
+}
+
+fn resolve_run_splits(
+    splits: &[RunSplit],
+    distance_m: Option<i64>,
+    duration_sec: Option<i64>,
+    elevation_gain_m: i64,
+) -> Result<Vec<RunSplit>, DomainError> {
+    if distance_m.is_some_and(|value| value <= 0)
+        || duration_sec.is_some_and(|value| value <= 0)
+        || elevation_gain_m < 0
+    {
+        return Err(DomainError::InvalidInput("invalid run details"));
+    }
+    if splits.len() > MAX_RUN_SPLITS {
+        return Err(DomainError::InvalidInput("run split limit reached"));
+    }
+    if splits
+        .iter()
+        .any(|split| split.distance_m <= 0 || split.duration_sec <= 0)
+    {
+        return Err(DomainError::InvalidInput(
+            "each run split needs a positive distance_m and duration_sec",
+        ));
+    }
+    if splits.is_empty() {
+        let (Some(distance_m), Some(duration_sec)) = (distance_m, duration_sec) else {
+            return Err(DomainError::InvalidInput(
+                "a run needs a distance_m and a duration_sec, as its splits or as its totals",
+            ));
+        };
+        return Ok(vec![RunSplit {
+            distance_m,
+            duration_sec,
+        }]);
+    }
+    let (distance_sum, duration_sum) = run_totals(splits);
+    if distance_m.is_some_and(|value| value != distance_sum) {
+        return Err(DomainError::InvalidInput(
+            "the run splits must sum to the distance_m of the run; cover any laps you do not know as one remainder split",
+        ));
+    }
+    if duration_sec.is_some_and(|value| value != duration_sum) {
+        return Err(DomainError::InvalidInput(
+            "the run splits must sum to the duration_sec of the run; cover any laps you do not know as one remainder split",
+        ));
+    }
+    Ok(splits.to_vec())
+}
+
+pub(crate) fn run_totals(splits: &[RunSplit]) -> (i64, i64) {
+    splits
+        .iter()
+        .fold((0i64, 0i64), |(distance, duration), split| {
+            (
+                distance.saturating_add(split.distance_m),
+                duration.saturating_add(split.duration_sec),
+            )
+        })
 }
 
 fn parse_id(value: &str) -> Result<Uuid, DomainError> {
@@ -324,10 +396,59 @@ pub(crate) mod test_support {
             label: Some("run".into()),
             notes: None,
             activity: CreateActivity::Run {
-                distance_m,
-                duration_sec: 1_800,
+                distance_m: Some(distance_m),
+                duration_sec: Some(1_800),
                 elevation_gain_m: 25,
+                splits: Vec::new(),
             },
+        }
+    }
+
+    pub(crate) fn run_from(
+        distance_m: Option<i64>,
+        duration_sec: Option<i64>,
+        splits: Vec<RunSplit>,
+    ) -> CreateWorkoutSession {
+        CreateWorkoutSession {
+            activity: CreateActivity::Run {
+                distance_m,
+                duration_sec,
+                elevation_gain_m: 25,
+                splits,
+            },
+            ..run(5_000)
+        }
+    }
+
+    pub(crate) fn run_with_splits(splits: Vec<RunSplit>) -> CreateWorkoutSession {
+        run_from(Some(5_000), Some(1_500), splits)
+    }
+
+    pub(crate) fn totals_of(session: &WorkoutSession) -> (i64, i64) {
+        match &session.activity {
+            ActivityView::Run {
+                distance_m,
+                duration_sec,
+                ..
+            } => (*distance_m, *duration_sec),
+            ActivityView::Strength { .. } => panic!("expected a run session"),
+        }
+    }
+
+    pub(crate) fn split(distance_m: i64, duration_sec: i64) -> RunSplit {
+        RunSplit {
+            distance_m,
+            duration_sec,
+        }
+    }
+
+    pub(crate) fn splits_of(session: &WorkoutSession) -> Vec<(i64, i64)> {
+        match &session.activity {
+            ActivityView::Run { splits, .. } => splits
+                .iter()
+                .map(|split| (split.distance_m, split.duration_sec))
+                .collect(),
+            ActivityView::Strength { .. } => panic!("expected a run session"),
         }
     }
 
@@ -432,9 +553,10 @@ mod tests {
                             started_at: Timestamp::parse("2026-01-02T03:04:05Z").unwrap(),
                             label: None,
                             notes: None,
-                            distance_m: 5_000,
-                            duration_sec: 1_800,
+                            distance_m: Some(5_000),
+                            duration_sec: Some(1_800),
                             elevation_gain_m: 0,
+                            splits: Vec::new(),
                         }
                     )
                     .await,

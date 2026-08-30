@@ -6,14 +6,15 @@ use sea_orm::{
 use uuid::Uuid;
 
 use super::{
-    ActivityView, CreateActivity, CreateWorkoutSession, SessionFilter, WorkoutSession,
-    WorkoutSessionSummary, make_page, mutation_error, parse_id, validate_notes,
+    ActivityView, CreateActivity, CreateWorkoutSession, MAX_RUN_SPLITS, RunSplit, SessionFilter,
+    WorkoutSession, WorkoutSessionSummary, make_page, mutation_error, parse_id, resolve_run_splits,
+    run_totals, validate_notes,
 };
 use crate::domain::{
     Domain,
     auth::Principal,
     catalogue::{Page, PageRequest},
-    entity::{runs, sessions},
+    entity::{run_splits, runs, sessions},
     error::DomainError,
 };
 
@@ -40,16 +41,54 @@ fn validate_session(input: &CreateWorkoutSession) -> Result<(), DomainError> {
         ));
     }
     validate_notes(input.notes.as_ref())?;
-    if let CreateActivity::Run {
-        distance_m,
-        duration_sec,
-        elevation_gain_m,
-    } = input.activity
-        && (distance_m <= 0 || duration_sec <= 0 || elevation_gain_m < 0)
-    {
-        return Err(DomainError::InvalidInput("invalid run details"));
+    Ok(())
+}
+
+pub(super) async fn insert_run_splits<C: ConnectionTrait>(
+    connection: &C,
+    user_id: &str,
+    session_id: Uuid,
+    splits: &[RunSplit],
+) -> Result<(), DomainError> {
+    for (position, split) in splits.iter().enumerate() {
+        run_splits::ActiveModel {
+            id: Set(Uuid::now_v7().to_string()),
+            session_id: Set(session_id.to_string()),
+            user_id: Set(user_id.to_owned()),
+            activity_type: Set("run".to_owned()),
+            position: Set(position as i64),
+            distance_m: Set(split.distance_m),
+            duration_sec: Set(split.duration_sec),
+        }
+        .insert(connection)
+        .await
+        .map_err(mutation_error)?;
     }
     Ok(())
+}
+
+async fn all_run_splits<C: ConnectionTrait>(
+    connection: &C,
+    principal: &Principal,
+    session_id: Uuid,
+) -> Result<Vec<RunSplit>, DomainError> {
+    let models = run_splits::Entity::find()
+        .filter(run_splits::Column::SessionId.eq(session_id.to_string()))
+        .filter(run_splits::Column::UserId.eq(principal.user_id().to_string()))
+        .order_by_asc(run_splits::Column::Position)
+        .limit((MAX_RUN_SPLITS + 1) as u64)
+        .all(connection)
+        .await?;
+    if models.len() > MAX_RUN_SPLITS {
+        return Err(DomainError::Conflict);
+    }
+    Ok(models
+        .into_iter()
+        .map(|model| RunSplit {
+            distance_m: model.distance_m,
+            duration_sec: model.duration_sec,
+        })
+        .collect())
 }
 
 impl Domain {
@@ -59,6 +98,15 @@ impl Domain {
         input: CreateWorkoutSession,
     ) -> Result<WorkoutSession, DomainError> {
         validate_session(&input)?;
+        let splits = match &input.activity {
+            CreateActivity::Strength => Vec::new(),
+            CreateActivity::Run {
+                distance_m,
+                duration_sec,
+                elevation_gain_m,
+                splits,
+            } => resolve_run_splits(splits, *distance_m, *duration_sec, *elevation_gain_m)?,
+        };
         let id = Uuid::now_v7();
         let kind = match input.activity {
             CreateActivity::Strength => "strength",
@@ -77,22 +125,19 @@ impl Domain {
         .await
         .map_err(mutation_error)?;
         if let CreateActivity::Run {
-            distance_m,
-            duration_sec,
-            elevation_gain_m,
-        } = input.activity
+            elevation_gain_m, ..
+        } = &input.activity
         {
             runs::ActiveModel {
                 session_id: Set(id.to_string()),
                 user_id: Set(principal.user_id().to_string()),
                 activity_type: Set("run".to_owned()),
-                distance_m: Set(distance_m),
-                duration_sec: Set(duration_sec),
-                elevation_gain_m: Set(elevation_gain_m),
+                elevation_gain_m: Set(*elevation_gain_m),
             }
             .insert(&tx)
             .await
             .map_err(mutation_error)?;
+            insert_run_splits(&tx, &principal.user_id().to_string(), id, &splits).await?;
         }
         let result = self.get_session_on(&tx, principal, id).await?;
         tx.commit().await.map_err(mutation_error)?;
@@ -186,10 +231,13 @@ impl Domain {
                     .one(connection)
                     .await?
                     .ok_or(DomainError::NotFound)?;
+                let splits = all_run_splits(connection, principal, id).await?;
+                let (distance_m, duration_sec) = run_totals(&splits);
                 ActivityView::Run {
-                    distance_m: run.distance_m,
-                    duration_sec: run.duration_sec,
+                    distance_m,
+                    duration_sec,
                     elevation_gain_m: run.elevation_gain_m,
+                    splits,
                 }
             }
             _ => return Err(DomainError::NotFound),
@@ -222,9 +270,9 @@ impl Domain {
 
 #[cfg(test)]
 mod tests {
-    use super::super::SessionFilter;
     use super::super::test_support::*;
-    use crate::domain::catalogue::PageRequest;
+    use super::super::{MAX_RUN_SPLITS, SessionFilter};
+    use crate::domain::{catalogue::PageRequest, error::DomainError};
 
     #[tokio::test]
     async fn list_dtos_are_shallow_while_item_reads_are_complete() {
@@ -245,6 +293,190 @@ mod tests {
         assert_eq!(
             complete["activity"]["exercises"][0]["sets"][0]["load_g"],
             -20_000
+        );
+    }
+
+    #[tokio::test]
+    async fn a_run_keeps_its_splits_in_order_and_derives_its_totals_from_them() {
+        let (domain, _, owner, _, _, _, _) = memory_domain().await;
+        let laps = vec![split(1_000, 295), split(1_000, 301), split(3_000, 904)];
+
+        let created = domain
+            .create_session(&owner, run_from(None, None, laps))
+            .await
+            .unwrap();
+        assert_eq!(
+            splits_of(&created),
+            vec![(1_000, 295), (1_000, 301), (3_000, 904)]
+        );
+        assert_eq!(totals_of(&created), (5_000, 1_500));
+        let read = domain.get_session(&owner, created.id).await.unwrap();
+        assert_eq!(splits_of(&read), splits_of(&created));
+        assert_eq!(totals_of(&read), (5_000, 1_500));
+    }
+
+    #[tokio::test]
+    async fn a_run_given_only_its_totals_is_stored_as_one_split() {
+        let (domain, _, owner, _, _, _, _) = memory_domain().await;
+        let created = domain
+            .create_session(&owner, run_from(Some(8_000), Some(2_400), Vec::new()))
+            .await
+            .unwrap();
+        assert_eq!(splits_of(&created), vec![(8_000, 2_400)]);
+        assert_eq!(totals_of(&created), (8_000, 2_400));
+    }
+
+    #[tokio::test]
+    async fn a_run_needs_its_splits_or_its_totals_and_they_must_agree() {
+        let (domain, _, owner, _, _, _, _) = memory_domain().await;
+        let laps = || vec![split(4_000, 1_220), split(1_000, 280)];
+
+        assert_eq!(
+            splits_of(
+                &domain
+                    .create_session(&owner, run_from(Some(5_000), Some(1_500), laps()))
+                    .await
+                    .unwrap()
+            ),
+            vec![(4_000, 1_220), (1_000, 280)]
+        );
+
+        for absent in [
+            run_from(None, None, Vec::new()),
+            run_from(Some(5_000), None, Vec::new()),
+            run_from(None, Some(1_500), Vec::new()),
+        ] {
+            assert!(matches!(
+                domain.create_session(&owner, absent).await,
+                Err(DomainError::InvalidInput(
+                    "a run needs a distance_m and a duration_sec, as its splits or as its totals"
+                ))
+            ));
+        }
+
+        assert!(matches!(
+            domain
+                .create_session(&owner, run_from(Some(4_999), Some(1_500), laps()))
+                .await,
+            Err(DomainError::InvalidInput(message)) if message.contains("distance_m")
+        ));
+        assert!(matches!(
+            domain
+                .create_session(&owner, run_from(Some(5_000), Some(1_501), laps()))
+                .await,
+            Err(DomainError::InvalidInput(message)) if message.contains("duration_sec")
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_split_needs_a_positive_distance_and_duration_and_the_list_is_bounded() {
+        let (domain, _, owner, _, _, _, _) = memory_domain().await;
+        for laps in [
+            vec![split(0, 295)],
+            vec![split(-1_000, 295)],
+            vec![split(1_000, 0)],
+            vec![split(1_000, -295)],
+        ] {
+            assert!(matches!(
+                domain.create_session(&owner, run_with_splits(laps)).await,
+                Err(DomainError::InvalidInput(
+                    "each run split needs a positive distance_m and duration_sec"
+                ))
+            ));
+        }
+
+        let over_limit = vec![split(1_000, 295); MAX_RUN_SPLITS + 1];
+        assert!(matches!(
+            domain
+                .create_session(&owner, run_with_splits(over_limit))
+                .await,
+            Err(DomainError::InvalidInput("run split limit reached"))
+        ));
+        let at_limit = vec![split(50, 15); MAX_RUN_SPLITS];
+        assert_eq!(
+            splits_of(
+                &domain
+                    .create_session(&owner, run_with_splits(at_limit))
+                    .await
+                    .unwrap()
+            )
+            .len(),
+            MAX_RUN_SPLITS
+        );
+    }
+
+    #[tokio::test]
+    async fn the_splits_of_a_run_must_sum_to_its_distance_and_duration() {
+        let (domain, _, owner, _, _, _, _) = memory_domain().await;
+        assert!(
+            domain
+                .create_session(
+                    &owner,
+                    run_with_splits(vec![split(4_000, 1_220), split(1_000, 280)])
+                )
+                .await
+                .is_ok()
+        );
+
+        for laps in [
+            vec![split(4_000, 1_220), split(999, 280)],
+            vec![split(4_000, 1_220), split(1_001, 280)],
+        ] {
+            assert!(matches!(
+                domain.create_session(&owner, run_with_splits(laps)).await,
+                Err(DomainError::InvalidInput(message)) if message.contains("distance_m")
+            ));
+        }
+
+        for laps in [
+            vec![split(4_000, 1_220), split(1_000, 279)],
+            vec![split(4_000, 1_220), split(1_000, 281)],
+        ] {
+            assert!(matches!(
+                domain.create_session(&owner, run_with_splits(laps)).await,
+                Err(DomainError::InvalidInput(message)) if message.contains("duration_sec")
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn list_workouts_reports_a_run_it_can_page_alongside_its_derived_totals() {
+        let (domain, _, owner, _, _, _, _) = memory_domain().await;
+        let created = domain
+            .create_session(
+                &owner,
+                run_from(None, None, vec![split(1_000, 295), split(7_000, 2_105)]),
+            )
+            .await
+            .unwrap();
+        let listed = domain
+            .list_workouts(&owner, SessionFilter::default(), PageRequest::default())
+            .await
+            .unwrap();
+        assert_eq!(listed.items.len(), 1);
+        assert_eq!(listed.items[0].id, created.id);
+        assert_eq!(
+            totals_of(&domain.get_session(&owner, created.id).await.unwrap()),
+            (8_000, 2_400)
+        );
+    }
+
+    #[tokio::test]
+    async fn the_splits_of_a_run_are_invisible_to_another_user() {
+        let (domain, _, owner, other, superuser, _, _) = memory_domain().await;
+        let session = domain
+            .create_session(&owner, run_with_splits(vec![split(5_000, 1_500)]))
+            .await
+            .unwrap();
+        for stranger in [&other, &superuser] {
+            assert!(matches!(
+                domain.get_session(stranger, session.id).await,
+                Err(DomainError::NotFound)
+            ));
+        }
+        assert_eq!(
+            splits_of(&domain.get_session(&owner, session.id).await.unwrap()),
+            vec![(5_000, 1_500)]
         );
     }
 }

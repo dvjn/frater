@@ -4,8 +4,8 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::domain::{
-    AddExerciseSet, BodyweightFilter, MAX_BODYWEIGHT_G, PageRequest, SessionFilter, StatsRange,
-    Timestamp,
+    AddExerciseSet, BodyweightFilter, MAX_BODYWEIGHT_G, MAX_RUN_SPLITS, PageRequest, SessionFilter,
+    StatsRange, Timestamp,
 };
 
 /// A batch resolver answers one entry per name, so the list is bounded by the
@@ -130,11 +130,21 @@ pub(super) enum ReplaceActivityArg {
         exercises: Vec<LogWorkoutExerciseArg>,
     },
     Run {
-        distance_m: i64,
-        duration_sec: i64,
+        #[serde(default)]
+        distance_m: Option<i64>,
+        #[serde(default)]
+        duration_sec: Option<i64>,
         #[serde(default)]
         elevation_gain_m: i64,
+        #[serde(default)]
+        splits: Vec<RunSplitArg>,
     },
+}
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RunSplitArg {
+    pub(super) distance_m: i64,
+    pub(super) duration_sec: i64,
 }
 /// The identity fields `id`, `session_id` and `contraction_type` carry no
 /// instruction: they exist so that the output of `get_workout_session` can be
@@ -372,7 +382,7 @@ pub(super) const TOOL_SPECS: &[(&str, &str, &str)] = &[
     ),
     (
         "create_workout_session",
-        "Create an empty strength session or a run. Input: started_at (YYYY-MM-DD or RFC 3339), optional label, activity. To record a complete strength workout in one call use log_workout instead.",
+        "Create an empty strength session or a run. Input: started_at (YYYY-MM-DD or RFC 3339), optional label, activity. A run is its splits[{distance_m,duration_sec}], its laps in order: they are what is stored, and the distance and duration of the run are their sums. For a run you have no laps for, send just distance_m and duration_sec instead and it is recorded as a single split. Send both and the totals must equal the sums, so cover any laps you do not know as one remainder split. Every run needs one or the other. To record a complete strength workout in one call use log_workout instead.",
         "workouts:write",
     ),
     (
@@ -387,7 +397,7 @@ pub(super) const TOOL_SPECS: &[(&str, &str, &str)] = &[
     ),
     (
         "replace_workout",
-        "Correct a logged workout by submitting the whole thing again, in one atomic call. Read it with get_workout_session, change what is wrong, and send the complete session back: the output of that tool is accepted unchanged. The session keeps its id; every exercise and set id is reissued. Input: id, started_at, optional label and notes, then either activity (the nested {type:'strength', exercises[]} or {type:'run', distance_m, duration_sec, optional elevation_gain_m} that get_workout_session returns) or a top-level exercises[{exercise (id or name), optional notes, sets[]}] as log_workout takes it — send one or the other, never both. Each exercise entry may name its exercise with 'exercise', or with the 'exercise_id' and 'exercise_name' that get_workout_session returns, but not with both; when you send exercise_id and exercise_name together they must name the same exercise, so to change the movement send only the one field you changed. The remaining identity fields (id, session_id, session_exercise_id, contraction_type) are accepted and ignored. Array order sets the order: an explicit position that disagrees with the index of its array element is rejected, so reorder the array instead of editing a position. Exercises and sets you leave out are removed. A strength payload against a run session, or a run payload against a strength session, changes the activity type of the session and discards the previous activity detail. Nothing changes if any part is invalid.",
+        "Correct a logged workout by submitting the whole thing again, in one atomic call. Read it with get_workout_session, change what is wrong, and send the complete session back: the output of that tool is accepted unchanged. The session keeps its id; every exercise and set id is reissued. Input: id, started_at, optional label and notes, then either activity (the nested {type:'strength', exercises[]} or {type:'run', optional elevation_gain_m, splits[{distance_m,duration_sec}]} that get_workout_session returns; a run is its splits, its laps in order, and its distance and duration are their sums, so for a run you have no laps for send just distance_m and duration_sec instead and it is recorded as a single split, and when you send both they must agree, with any laps you do not know folded into one remainder split) or a top-level exercises[{exercise (id or name), optional notes, sets[]}] as log_workout takes it — send one or the other, never both. Each exercise entry may name its exercise with 'exercise', or with the 'exercise_id' and 'exercise_name' that get_workout_session returns, but not with both; when you send exercise_id and exercise_name together they must name the same exercise, so to change the movement send only the one field you changed. The remaining identity fields (id, session_id, session_exercise_id, contraction_type) are accepted and ignored. Array order sets the order: an explicit position that disagrees with the index of its array element is rejected, so reorder the array instead of editing a position. Exercises, sets, and run splits you leave out are removed. A strength payload against a run session, or a run payload against a strength session, changes the activity type of the session and discards the previous activity detail. Nothing changes if any part is invalid.",
         "workouts:write",
     ),
     (
@@ -432,9 +442,10 @@ pub(super) fn schema_for_tool(name: &str) -> JsonObject {
         "secondary_muscles":reference_list.clone(),
         "equipment":reference_list.clone()
     });
+    let run_splits = json!({"type":"array","maxItems":MAX_RUN_SPLITS,"items":{"type":"object","additionalProperties":false,"required":["distance_m","duration_sec"],"properties":{"distance_m":{"type":"integer","minimum":1},"duration_sec":{"type":"integer","minimum":1}}},"description":"The laps of the run, in order, and the source of truth for its distance and duration. Send them, or send distance_m and duration_sec instead and the run is recorded as one split; send both and the totals must equal the sums. Cover laps you do not know as one remainder split."});
     let activity = json!({"oneOf":[
         {"type":"object","additionalProperties":false,"required":["type"],"properties":{"type":{"const":"strength"}}},
-        {"type":"object","additionalProperties":false,"required":["type","distance_m","duration_sec"],"properties":{"type":{"const":"run"},"distance_m":{"type":"integer","minimum":1},"duration_sec":{"type":"integer","minimum":1},"elevation_gain_m":{"type":"integer","minimum":0}}}
+        {"type":"object","additionalProperties":false,"required":["type"],"properties":{"type":{"const":"run"},"distance_m":{"type":"integer","minimum":1},"duration_sec":{"type":"integer","minimum":1},"elevation_gain_m":{"type":"integer","minimum":0},"splits":run_splits.clone()}}
     ]});
     let notes = json!({"type":["string","null"],"maxLength":1000});
     let session = json!({"started_at":{"type":"string","description":"YYYY-MM-DD or an RFC 3339 timestamp."},"label":{"type":["string","null"],"maxLength":256},"notes":notes.clone(),"activity":activity});
@@ -491,7 +502,7 @@ pub(super) fn schema_for_tool(name: &str) -> JsonObject {
             if name == "replace_workout" {
                 let activity = json!({"oneOf":[
                     {"type":"object","additionalProperties":false,"required":["type","exercises"],"properties":{"type":{"const":"strength"},"exercises":exercises}},
-                    {"type":"object","additionalProperties":false,"required":["type","distance_m","duration_sec"],"properties":{"type":{"const":"run"},"distance_m":{"type":"integer","minimum":1},"duration_sec":{"type":"integer","minimum":1},"elevation_gain_m":{"type":"integer","minimum":0}}}
+                    {"type":"object","additionalProperties":false,"required":["type"],"properties":{"type":{"const":"run"},"distance_m":{"type":"integer","minimum":1},"duration_sec":{"type":"integer","minimum":1},"elevation_gain_m":{"type":"integer","minimum":0},"splits":run_splits.clone()}}
                 ]});
                 (
                     merge(
@@ -624,9 +635,12 @@ fn output_definitions() -> serde_json::Map<String, Value> {
          "properties":{"type":{"const":"strength"},
                        "exercises":{"type":"array","items":{"$ref":"#/$defs/session_exercise"}}}},
         {"type":"object","additionalProperties":false,
-         "required":["type","distance_m","duration_sec","elevation_gain_m"],
+         "required":["type","distance_m","duration_sec","elevation_gain_m","splits"],
          "properties":{"type":{"const":"run"},"distance_m":{"type":"integer"},
-                       "duration_sec":{"type":"integer"},"elevation_gain_m":{"type":"integer"}}}
+                       "duration_sec":{"type":"integer"},"elevation_gain_m":{"type":"integer"},
+                       "splits":{"type":"array","items":{"type":"object","additionalProperties":false,
+                                 "required":["distance_m","duration_sec"],
+                                 "properties":{"distance_m":{"type":"integer"},"duration_sec":{"type":"integer"}}}}}}
     ]});
     let workout_session = json!({
         "type":"object","additionalProperties":false,
@@ -886,7 +900,14 @@ pub(super) fn example_for_tool(name: &str) -> Value {
             json!({"started_at_from":"2026-08-01","started_at_to":"2026-08-16","activity":"strength"})
         }
         "create_workout_session" => {
-            json!({"started_at":"2026-08-16","label":"Leg day","activity":{"type":"strength"}})
+            json!({"started_at":"2026-08-16","label":"Morning run","activity":{
+                "type":"run","elevation_gain_m":40,
+                "splits":[
+                    {"distance_m":1000,"duration_sec":295},
+                    {"distance_m":1000,"duration_sec":301},
+                    {"distance_m":6000,"duration_sec":1804}
+                ]
+            }})
         }
         "log_workout" => json!({
             "started_at":"2026-08-16","label":"Leg day",
@@ -896,10 +917,11 @@ pub(super) fn example_for_tool(name: &str) -> Value {
             ]}]
         }),
         "replace_workout" => json!({
-            "id":id,"started_at":"2026-08-16","label":"Leg day",
-            "exercises":[{"exercise":"Back squat","sets":[
-                {"set_type":"working","reps":5,"load_g":62500}
-            ]}]
+            "id":id,"started_at":"2026-08-16","label":"Morning run",
+            "activity":{
+                "type":"run","distance_m":8000,"duration_sec":2400,"elevation_gain_m":40,
+                "splits":[{"distance_m":1000,"duration_sec":295},{"distance_m":7000,"duration_sec":2105}]
+            }
         }),
         "exercise_history" => json!({"exercise":"Back squat","from":"2026-07-01","limit":10}),
         "personal_records" => json!({"exercise":"Back squat"}),
