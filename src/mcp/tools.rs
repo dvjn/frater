@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::domain::{
     CreateWorkoutSession, DomainError, ExerciseInput, ExerciseMuscleInput, LogBodyweight,
     LogWorkout, LogWorkoutExercise, Lookup, MAX_EXERCISE_ASSOCIATIONS, NamedInput, Principal,
-    ReplaceRun,
+    ReplaceRun, RunSplit,
 };
 
 use super::McpServer;
@@ -288,6 +288,7 @@ impl McpServer {
                         distance_m,
                         duration_sec,
                         elevation_gain_m,
+                        splits,
                     }) => output!(self.domain.replace_run(
                         &principal,
                         input.id,
@@ -298,6 +299,7 @@ impl McpServer {
                             distance_m,
                             duration_sec,
                             elevation_gain_m,
+                            splits,
                         }
                     )),
                     Ok(Replacement::Strength(entries)) => {
@@ -518,9 +520,10 @@ impl McpServer {
 enum Replacement {
     Strength(Vec<LogWorkoutExerciseArg>),
     Run {
-        distance_m: i64,
-        duration_sec: i64,
+        distance_m: Option<i64>,
+        duration_sec: Option<i64>,
         elevation_gain_m: i64,
+        splits: Vec<RunSplit>,
     },
 }
 
@@ -544,12 +547,20 @@ fn replacement_payload(
                 distance_m,
                 duration_sec,
                 elevation_gain_m,
+                splits,
             }),
             None,
         ) => Ok(Replacement::Run {
             distance_m: *distance_m,
             duration_sec: *duration_sec,
             elevation_gain_m: *elevation_gain_m,
+            splits: splits
+                .iter()
+                .map(|split| RunSplit {
+                    distance_m: split.distance_m,
+                    duration_sec: split.duration_sec,
+                })
+                .collect(),
         }),
         (None, Some(exercises)) => Ok(Replacement::Strength(exercises.clone())),
         (None, None) => Err(invalid(

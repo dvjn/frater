@@ -3,13 +3,14 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use super::{
-    AddExerciseSet, MAX_EXERCISE_SETS, MAX_SESSION_EXERCISES, Timestamp, WorkoutSession,
-    mutation_error, sets::validate_set, validate_notes,
+    AddExerciseSet, MAX_EXERCISE_SETS, MAX_SESSION_EXERCISES, RunSplit, Timestamp, WorkoutSession,
+    mutation_error, resolve_run_splits, sessions::insert_run_splits, sets::validate_set,
+    validate_notes,
 };
 use crate::domain::{
     Domain,
     auth::Principal,
-    entity::{exercise_sets, exercises, runs, session_exercises, sessions},
+    entity::{exercise_sets, exercises, run_splits, runs, session_exercises, sessions},
     error::DomainError,
 };
 
@@ -41,9 +42,10 @@ pub struct ReplaceRun {
     pub started_at: Timestamp,
     pub label: Option<String>,
     pub notes: Option<String>,
-    pub distance_m: i64,
-    pub duration_sec: i64,
+    pub distance_m: Option<i64>,
+    pub duration_sec: Option<i64>,
     pub elevation_gain_m: i64,
+    pub splits: Vec<RunSplit>,
 }
 
 fn validate_label(label: Option<&String>) -> Result<(), DomainError> {
@@ -82,6 +84,20 @@ fn validate_workout(input: &LogWorkout) -> Result<(), DomainError> {
     {
         return Err(DomainError::InvalidInput("exercise set limit reached"));
     }
+    Ok(())
+}
+
+async fn delete_run_splits<C: ConnectionTrait>(
+    connection: &C,
+    user_id: &str,
+    session_id: Uuid,
+) -> Result<(), DomainError> {
+    run_splits::Entity::delete_many()
+        .filter(run_splits::Column::SessionId.eq(session_id.to_string()))
+        .filter(run_splits::Column::UserId.eq(user_id.to_owned()))
+        .exec(connection)
+        .await
+        .map_err(mutation_error)?;
     Ok(())
 }
 
@@ -237,6 +253,7 @@ impl Domain {
         }
 
         if was_run {
+            delete_run_splits(&tx, &user_id, session_id).await?;
             runs::Entity::delete_many()
                 .filter(runs::Column::SessionId.eq(session_id.to_string()))
                 .filter(runs::Column::UserId.eq(user_id.clone()))
@@ -273,9 +290,12 @@ impl Domain {
     ) -> Result<WorkoutSession, DomainError> {
         validate_label(input.label.as_ref())?;
         validate_notes(input.notes.as_ref())?;
-        if input.distance_m <= 0 || input.duration_sec <= 0 || input.elevation_gain_m < 0 {
-            return Err(DomainError::InvalidInput("invalid run details"));
-        }
+        let splits = resolve_run_splits(
+            &input.splits,
+            input.distance_m,
+            input.duration_sec,
+            input.elevation_gain_m,
+        )?;
 
         let user_id = principal.user_id().to_string();
         let tx = self.begin_immediate().await?;
@@ -313,19 +333,19 @@ impl Domain {
 
         let run = runs::ActiveModel {
             session_id: Set(session_id.to_string()),
-            user_id: Set(user_id),
+            user_id: Set(user_id.clone()),
             activity_type: Set("run".to_owned()),
-            distance_m: Set(input.distance_m),
-            duration_sec: Set(input.duration_sec),
             elevation_gain_m: Set(input.elevation_gain_m),
         };
         // Every path that sets activity_type='run' writes the runs row with it,
         // so only a session that was not a run needs the row created.
         if was_run {
             run.update(&tx).await.map_err(mutation_error)?;
+            delete_run_splits(&tx, &user_id, session_id).await?;
         } else {
             run.insert(&tx).await.map_err(mutation_error)?;
         }
+        insert_run_splits(&tx, &user_id, session_id, &splits).await?;
 
         let result = self.get_session_on(&tx, principal, session_id).await?;
         tx.commit().await.map_err(mutation_error)?;
@@ -339,7 +359,7 @@ mod tests {
     use super::*;
     use crate::domain::{
         catalogue::PageRequest,
-        workouts::{ActivityView, ExerciseSet, MAX_NOTES, SessionFilter},
+        workouts::{ActivityView, ExerciseSet, MAX_NOTES, MAX_RUN_SPLITS, SessionFilter},
     };
 
     fn dynamic(reps: i64, load_g: i64) -> AddExerciseSet {
@@ -1008,9 +1028,10 @@ mod tests {
                     started_at: Timestamp::parse("2026-05-23").unwrap(),
                     label: None,
                     notes: None,
-                    distance_m: 8_000,
-                    duration_sec: 2_400,
+                    distance_m: Some(8_000),
+                    duration_sec: Some(2_400),
                     elevation_gain_m: 40,
+                    splits: Vec::new(),
                 },
             )
             .await
@@ -1069,6 +1090,230 @@ mod tests {
                 .log_workout(&owner, template(Some("n".repeat(MAX_NOTES)), None, None))
                 .await
                 .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_run_overwrites_the_whole_split_list() {
+        let (domain, _, owner, _, _, _, _) = memory_domain().await;
+        let session = domain
+            .create_session(
+                &owner,
+                run_with_splits(vec![
+                    split(1_000, 295),
+                    split(1_000, 301),
+                    split(3_000, 904),
+                ]),
+            )
+            .await
+            .unwrap();
+
+        let replacement = |splits| ReplaceRun {
+            started_at: Timestamp::parse("2026-05-23").unwrap(),
+            label: None,
+            notes: None,
+            distance_m: Some(8_000),
+            duration_sec: Some(2_400),
+            elevation_gain_m: 40,
+            splits,
+        };
+        let shrunk = domain
+            .replace_run(&owner, session.id, replacement(vec![split(8_000, 2_400)]))
+            .await
+            .unwrap();
+        assert_eq!(splits_of(&shrunk), vec![(8_000, 2_400)]);
+
+        let from_totals = domain
+            .replace_run(&owner, session.id, replacement(Vec::new()))
+            .await
+            .unwrap();
+        assert_eq!(splits_of(&from_totals), vec![(8_000, 2_400)]);
+        assert_eq!(totals_of(&from_totals), (8_000, 2_400));
+
+        assert!(matches!(
+            domain
+                .replace_run(&owner, session.id, replacement(vec![split(1_000, 0)]))
+                .await,
+            Err(DomainError::InvalidInput(
+                "each run split needs a positive distance_m and duration_sec"
+            ))
+        ));
+        assert!(matches!(
+            domain
+                .replace_run(
+                    &owner,
+                    session.id,
+                    replacement(vec![split(1_000, 295); MAX_RUN_SPLITS + 1])
+                )
+                .await,
+            Err(DomainError::InvalidInput("run split limit reached"))
+        ));
+    }
+
+    #[tokio::test]
+    async fn replacing_a_run_keeps_its_splits_summing_to_its_totals() {
+        let (domain, _, owner, _, _, _, _) = memory_domain().await;
+        let session = domain
+            .create_session(&owner, run_with_splits(vec![split(5_000, 1_500)]))
+            .await
+            .unwrap();
+
+        let replacement = |splits| ReplaceRun {
+            started_at: Timestamp::parse("2026-05-23").unwrap(),
+            label: None,
+            notes: None,
+            distance_m: Some(5_000),
+            duration_sec: Some(1_500),
+            elevation_gain_m: 40,
+            splits,
+        };
+        assert_eq!(
+            splits_of(
+                &domain
+                    .replace_run(
+                        &owner,
+                        session.id,
+                        replacement(vec![split(4_000, 1_220), split(1_000, 280)])
+                    )
+                    .await
+                    .unwrap()
+            ),
+            vec![(4_000, 1_220), (1_000, 280)]
+        );
+
+        for splits in [
+            vec![split(4_000, 1_220), split(999, 280)],
+            vec![split(4_000, 1_220), split(1_001, 280)],
+        ] {
+            assert!(matches!(
+                domain.replace_run(&owner, session.id, replacement(splits)).await,
+                Err(DomainError::InvalidInput(message)) if message.contains("distance_m")
+            ));
+        }
+
+        for splits in [
+            vec![split(4_000, 1_220), split(1_000, 279)],
+            vec![split(4_000, 1_220), split(1_000, 281)],
+        ] {
+            assert!(matches!(
+                domain.replace_run(&owner, session.id, replacement(splits)).await,
+                Err(DomainError::InvalidInput(message)) if message.contains("duration_sec")
+            ));
+        }
+
+        assert!(
+            domain
+                .replace_run(&owner, session.id, replacement(Vec::new()))
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn replacing_a_run_takes_its_splits_or_its_totals_and_needs_one_of_them() {
+        let (domain, _, owner, _, _, _, _) = memory_domain().await;
+        let session = domain
+            .create_session(&owner, run_with_splits(vec![split(5_000, 1_500)]))
+            .await
+            .unwrap();
+        let replacement = |distance_m, duration_sec, splits| ReplaceRun {
+            started_at: Timestamp::parse("2026-05-23").unwrap(),
+            label: None,
+            notes: None,
+            distance_m,
+            duration_sec,
+            elevation_gain_m: 40,
+            splits,
+        };
+
+        let from_splits = domain
+            .replace_run(
+                &owner,
+                session.id,
+                replacement(None, None, vec![split(1_000, 295), split(7_000, 2_105)]),
+            )
+            .await
+            .unwrap();
+        assert_eq!(totals_of(&from_splits), (8_000, 2_400));
+
+        assert!(matches!(
+            domain
+                .replace_run(&owner, session.id, replacement(None, None, Vec::new()))
+                .await,
+            Err(DomainError::InvalidInput(
+                "a run needs a distance_m and a duration_sec, as its splits or as its totals"
+            ))
+        ));
+        assert_eq!(
+            totals_of(&domain.get_session(&owner, session.id).await.unwrap()),
+            (8_000, 2_400)
+        );
+    }
+
+    #[tokio::test]
+    async fn turning_a_run_into_a_workout_discards_its_splits() {
+        let (domain, database, owner, _, _, dynamic_id, _) = memory_domain().await;
+        let session = domain
+            .create_session(&owner, run_with_splits(vec![split(5_000, 1_500)]))
+            .await
+            .unwrap();
+        let stored = || {
+            run_splits::Entity::find()
+                .filter(run_splits::Column::SessionId.eq(session.id.to_string()))
+                .all(&database)
+        };
+        assert_eq!(stored().await.unwrap().len(), 1);
+
+        domain
+            .replace_workout(
+                &owner,
+                session.id,
+                LogWorkout {
+                    started_at: Timestamp::parse("2026-05-23").unwrap(),
+                    label: None,
+                    notes: None,
+                    exercises: vec![LogWorkoutExercise {
+                        exercise_id: dynamic_id,
+                        notes: None,
+                        sets: vec![dynamic(5, 60_000)],
+                    }],
+                },
+            )
+            .await
+            .unwrap();
+        assert!(stored().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_stranger_cannot_overwrite_the_splits_of_a_run() {
+        let (domain, _, owner, other, superuser, _, _) = memory_domain().await;
+        let session = domain
+            .create_session(&owner, run_with_splits(vec![split(5_000, 1_500)]))
+            .await
+            .unwrap();
+        for stranger in [&other, &superuser] {
+            assert!(matches!(
+                domain
+                    .replace_run(
+                        stranger,
+                        session.id,
+                        ReplaceRun {
+                            started_at: Timestamp::parse("2026-05-23").unwrap(),
+                            label: None,
+                            notes: None,
+                            distance_m: Some(8_000),
+                            duration_sec: Some(2_400),
+                            elevation_gain_m: 40,
+                            splits: vec![split(8_000, 2_400)],
+                        }
+                    )
+                    .await,
+                Err(DomainError::NotFound)
+            ));
+        }
+        assert_eq!(
+            splits_of(&domain.get_session(&owner, session.id).await.unwrap()),
+            vec![(5_000, 1_500)]
         );
     }
 }

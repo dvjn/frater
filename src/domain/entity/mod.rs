@@ -16,6 +16,7 @@ pub(super) mod oauth_device_authorizations;
 pub(super) mod oauth_refresh_token_families;
 pub(super) mod oauth_refresh_tokens;
 pub(super) mod password_credentials;
+pub(super) mod run_splits;
 pub(super) mod runs;
 pub(super) mod session_exercises;
 pub(super) mod sessions;

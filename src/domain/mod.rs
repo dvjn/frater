@@ -36,8 +36,8 @@ pub use oauth::{
 };
 pub use secrets::Password;
 pub use workouts::{
-    AddExerciseSet, CreateWorkoutSession, LogWorkout, LogWorkoutExercise, ReplaceRun,
-    SessionFilter, StatsRange, Timestamp,
+    AddExerciseSet, CreateWorkoutSession, LogWorkout, LogWorkoutExercise, MAX_RUN_SPLITS,
+    ReplaceRun, RunSplit, SessionFilter, StatsRange, Timestamp,
 };
 
 #[cfg(test)]

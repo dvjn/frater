@@ -4,6 +4,7 @@ mod m20260815_000001_initial_schema;
 mod m20260824_000001_expand_implied_scopes;
 mod m20260824_000002_add_notes;
 mod m20260824_000003_add_bodyweight;
+mod m20260831_000001_add_run_splits;
 
 pub struct Migrator;
 
@@ -15,6 +16,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260824_000001_expand_implied_scopes::Migration),
             Box::new(m20260824_000002_add_notes::Migration),
             Box::new(m20260824_000003_add_bodyweight::Migration),
+            Box::new(m20260831_000001_add_run_splits::Migration),
         ]
     }
 }
@@ -46,6 +48,7 @@ mod tests {
             "exercise_sets",
             "runs",
             "bodyweight_readings",
+            "run_splits",
         ];
 
         Migrator::up(&db, None).await.unwrap();
