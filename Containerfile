@@ -14,9 +14,9 @@ COPY --from=layout /out/ /
 USER 65532:65532
 WORKDIR /data
 VOLUME ["/data"]
-EXPOSE 3000
+EXPOSE 3210
 
-ENV HTTP_ADDR=0.0.0.0:3000 \
+ENV HTTP_ADDR=0.0.0.0:3210 \
     DATABASE_URL="sqlite:///data/frater.db?mode=rwc" \
     SECRET_KEY=@/data/root.key \
     RUST_LOG=frater=info,tower_http=info

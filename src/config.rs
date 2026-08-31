@@ -121,7 +121,7 @@ fn http_addr() -> Result<SocketAddr> {
         Ok(value) => value
             .parse()
             .context("HTTP_ADDR must be a valid socket address"),
-        Err(env::VarError::NotPresent) => Ok(SocketAddr::from(([127, 0, 0, 1], 3000))),
+        Err(env::VarError::NotPresent) => Ok(SocketAddr::from(([127, 0, 0, 1], 3210))),
         Err(error) => Err(error).context("HTTP_ADDR must be valid Unicode"),
     }
 }

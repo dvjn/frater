@@ -31,7 +31,7 @@ pub fn page(
     }: Consent,
 ) -> Markup {
     layout(
-        "Authorize · frater",
+        "Authorize · Frater",
         html! {
             main class="auth-shell" {
                 form method="post" {
@@ -39,7 +39,7 @@ pub fn page(
                     article class="auth-card consent-card" {
                         div class="card-head" {
                             h1 { "Authorize access" }
-                            p { (client_name) " wants access to your frater account." }
+                            p { (client_name) " wants access to your Frater account." }
                         }
                         (account_entry(email))
                         (application_group(html! {

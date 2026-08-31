@@ -6,7 +6,7 @@ use maud::{Markup, html};
 
 pub fn entry(csrf: &str, invalid: bool) -> Markup {
     layout(
-        "Connect a device · frater",
+        "Connect a device · Frater",
         html! {
             main class="auth-shell" { article class="auth-card" {
                 h1 { "Connect a device" }
@@ -50,7 +50,7 @@ pub fn consent(
     }: Consent,
 ) -> Markup {
     layout(
-        "Connect device · frater",
+        "Connect device · Frater",
         html! {
             main class="auth-shell" { form method="post" {
                 input type="hidden" name="csrf" value=(csrf);
@@ -85,7 +85,7 @@ pub fn terminal(approved: bool) -> Markup {
         ("Connection denied", "The app or device was not connected.")
     };
     layout(
-        "Device confirmation · frater",
+        "Device confirmation · Frater",
         html! {
             main class="auth-shell" { article class="auth-card" {
                 h1 { (title) }

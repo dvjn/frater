@@ -3,30 +3,36 @@
 
 :root {
   color-scheme: dark;
-  --canvas: #010102;
-  --surface-1: #121315;
-  --surface-2: #181a1d;
-  --surface-3: #1e2024;
-  --hairline: #292b30;
-  --hairline-strong: #383b42;
-  --hairline-hover: #454950;
-  --ink: #f7f8f8;
-  --ink-secondary: #d0d6e0;
-  --muted: #8a8f98;
+  --canvas: #08090b;
+  --surface-1: #0e1013;
+  --surface-2: #14171b;
+  --surface-3: #1b1f24;
+  --hairline: #23272d;
+  --hairline-strong: #30353d;
+  --hairline-hover: #414751;
+  --ink: #f4f6f8;
+  --ink-secondary: #c3cad4;
+  --muted: #79828f;
   --primary: #5e6ad2;
-  --primary-hover: #5661c5;
+  --primary-hover: #6975dc;
   --primary-pressed: #4f59b8;
-  --danger: #e06c75;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --primary-ink: #ffffff;
+  --primary-faint: rgba(94, 106, 210, .12);
+  --danger-ink: #ef6b73;
+  --danger-line: #4d2429;
+  --danger-surface: #1a1012;
+  --focus-ring: rgba(130, 143, 255, .6);
+  --control-height: 36px;
+  --control-height-sm: 30px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
   --space-12: 48px;
-  --card-width: 30rem;
+  --card-width: 32rem;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-family: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-feature-settings: "liga" 1, "calt" 1;
@@ -52,7 +58,7 @@ body {
 body {
   min-width: 20rem;
   color: var(--ink);
-  font-size: 16px;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -66,10 +72,34 @@ a {
   color: inherit;
 }
 
-a:focus-visible {
-  border-radius: 4px;
-  outline: 2px solid rgba(130, 143, 255, .72);
-  outline-offset: 3px;
+/* Nothing in this design is rounded, so every focus ring is a square outline
+   at a fixed offset. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+code {
+  color: var(--ink-secondary);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* The uppercase micro-label that names a field, a group, or a value. */
+label,
+legend,
+.consent-caption,
+.consent-account-caption,
+.detail-label {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 
 .site-shell {
@@ -84,25 +114,23 @@ a:focus-visible {
 }
 
 header.site {
-  padding-block: var(--space-4);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-1);
 }
 
 .site-nav {
   display: flex;
-  min-height: 34px;
+  min-height: 56px;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
 }
 
 header.site .site-title {
-  display: inline-flex;
-  align-items: center;
   color: var(--ink);
-  font-size: 28px;
-  font-weight: 650;
-  line-height: 1.2;
-  letter-spacing: -.01em;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: .02em;
   text-decoration: none;
 }
 
@@ -113,17 +141,17 @@ header.site .site-title {
   margin: 0;
 }
 
-/* Navigation actions are compact, so the product title stays the loudest
-   element of the header. */
 .nav-auth [role="button"] {
   width: auto;
-  min-height: 34px;
+  min-height: var(--control-height-sm);
   padding: 0 var(--space-3);
   font-size: 13px;
 }
 
+/* A square icon button at compact height; the icon centers itself, so the
+   button carries no padding. */
 .nav-auth a.nav-icon {
-  width: 34px;
+  width: var(--control-height-sm);
   padding: 0;
   border-color: var(--hairline-strong);
   color: var(--ink-secondary);
@@ -139,13 +167,13 @@ header.site .site-title {
 main.auth-shell {
   width: min(100%, var(--card-width));
   margin-inline: auto;
-  padding: clamp(32px, 10vh, 96px) 16px 48px;
+  padding: var(--space-12) 16px var(--space-12);
   align-self: start;
 }
 
 main.home-shell {
   margin-inline: auto;
-  padding: clamp(48px, 24vh, 192px) 16px 48px;
+  padding: clamp(48px, 22vh, 176px) 16px var(--space-12);
   align-self: start;
   text-align: center;
 }
@@ -153,38 +181,42 @@ main.home-shell {
 main.home-shell h1 {
   margin: 0;
   font-size: 44px;
-  font-weight: 650;
-  letter-spacing: -.01em;
+  font-weight: 600;
+  letter-spacing: -.02em;
   line-height: 1.1;
 }
 
 main.home-shell p {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-4) 0 0;
   color: var(--muted);
-  font-size: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: uppercase;
 }
 
 .auth-card {
+  --card-pad: var(--space-4);
+
   margin: 0;
-  padding: var(--space-6);
+  padding: var(--card-pad);
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-lg);
   background: var(--surface-1);
 }
 
 .auth-card h1 {
   margin: 0 0 var(--space-2);
   color: var(--ink);
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 600;
   line-height: 1.2;
-  letter-spacing: -.01em;
+  letter-spacing: -.015em;
 }
 
 .auth-card > p:first-of-type {
-  margin: 0 0 var(--space-6);
+  margin: 0 0 var(--space-4);
   color: var(--muted);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 form {
@@ -192,26 +224,21 @@ form {
 }
 
 label {
-  display: block;
   margin: 0 0 var(--space-2);
-  color: var(--ink-secondary);
-  font-size: 14px;
-  font-weight: 500;
 }
 
 input:not([type="hidden"]) {
   display: block;
   width: 100%;
-  min-height: 44px;
+  min-height: var(--control-height);
   margin: 0 0 var(--space-4);
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-md);
-  outline: 2px solid transparent;
-  outline-offset: 1px;
+  border-radius: 0;
   color: var(--ink);
   caret-color: var(--primary-hover);
   background: var(--surface-2);
+  font-size: 14px;
 }
 
 input::placeholder {
@@ -222,32 +249,32 @@ input:hover {
   border-color: var(--hairline-hover);
 }
 
+/* The border itself turns accent, so the ring sits flush on it. */
 input:focus-visible {
   border-color: var(--primary);
-  outline-color: rgba(94, 105, 209, .5);
+  outline-offset: 0;
 }
 
-/* The final field keeps a full step of space before the primary action. */
-.auth-card input[type="password"] {
-  margin-bottom: var(--space-6);
+/* Only the card's own submit needs to clear the field above it. */
+.auth-card > form > button {
+  margin-top: var(--space-2);
 }
 
 button,
 a[role="button"] {
   display: inline-flex;
-  min-height: 44px;
+  min-height: var(--control-height);
   align-items: center;
   justify-content: center;
-  padding: 8px 14px;
+  padding: 0 var(--space-4);
   border: 1px solid var(--primary);
-  border-radius: var(--radius-md);
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-  color: #fff;
+  border-radius: 0;
+  color: var(--primary-ink);
   background: var(--primary);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 550;
   line-height: 1.2;
+  letter-spacing: .01em;
   text-align: center;
   text-decoration: none;
   cursor: pointer;
@@ -265,12 +292,6 @@ a[role="button"]:active {
   background: var(--primary-pressed);
 }
 
-button:focus-visible,
-a[role="button"]:focus-visible,
-header.site .site-title:focus-visible {
-  outline-color: rgba(130, 143, 255, .72);
-}
-
 button.secondary,
 a[role="button"].secondary {
   border-color: var(--hairline-strong);
@@ -284,73 +305,76 @@ a[role="button"].secondary:hover {
   color: var(--ink);
   background: var(--surface-3);
 }
+
 .auth-card button,
 .auth-card [role="button"] {
   width: 100%;
 }
 
-/* A subordinate control beside a value, at navigation height. */
+/* A subordinate control beside a value. */
 button.compact,
 a[role="button"].compact {
   width: auto;
-  min-height: 34px;
+  min-height: var(--control-height-sm);
   flex: none;
   padding: 0 var(--space-3);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 /* A small muted line with an inline link to the other auth page. */
 .auth-alternate {
   margin: var(--space-4) 0 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
   text-align: center;
 }
 
 .auth-alternate a {
-  color: var(--ink);
-  font-weight: 500;
+  color: var(--ink-secondary);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
+.auth-alternate a:hover {
+  color: var(--ink);
+}
+
+/* A note and an error share one panel shape; a 2px left rule carries the
+   semantic color, so the panel needs no fill louder than a surface. */
 .auth-note {
   margin: 0 0 var(--space-4);
   padding: var(--space-3);
   border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-md);
+  border-left: 2px solid var(--primary);
   color: var(--ink-secondary);
   background: var(--surface-2);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .auth-error {
   margin: 0 0 var(--space-4);
   padding: var(--space-3);
-  border: 1px solid #5b3137;
-  border-radius: var(--radius-md);
-  color: #f2b8bd;
-  background: #211416;
-  font-size: 14px;
-}
-
-code {
-  color: var(--ink-secondary);
-  font-family: var(--mono);
+  border: 1px solid var(--danger-line);
+  border-left: 2px solid var(--danger-ink);
+  color: var(--danger-ink);
+  background: var(--danger-surface);
   font-size: 13px;
 }
 
-/* A short code the user compares with a device, so it is the loudest element of
-   its card. */
+/* The device code is the one string a person has to compare character by
+   character, so it is set in mono at the largest size on the page. */
 .user-code {
-  margin: var(--space-6) 0;
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--primary);
   color: var(--ink);
+  background: var(--primary-faint);
   font-family: var(--mono);
-  font-size: clamp(22px, 7vw, 30px);
-  font-weight: 650;
-  letter-spacing: .08em;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: .22em;
   text-align: center;
-  white-space: nowrap;
+  overflow-x: auto;
 }
 
 /* Consent card
@@ -361,7 +385,7 @@ code {
 .consent-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-5);
 }
 
 /* A heading and its one supporting sentence read as a single block. */
@@ -379,7 +403,7 @@ code {
 
 .card-head p {
   color: var(--muted);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .consent-account {
@@ -388,23 +412,21 @@ code {
   align-items: center;
   padding: var(--space-3);
   border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-md);
   background: var(--surface-2);
 }
 
 .consent-avatar {
-  display: flex;
-  width: 36px;
-  height: 36px;
+  display: grid;
+  width: 32px;
+  height: 32px;
   flex: none;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-md);
-  color: var(--ink-secondary);
-  background: var(--surface-3);
+  place-items: center;
+  border: 1px solid var(--primary);
+  color: var(--primary-hover);
+  background: var(--primary-faint);
   font-size: 14px;
   font-weight: 600;
+  text-transform: uppercase;
 }
 
 .consent-account-body {
@@ -412,14 +434,10 @@ code {
   flex: 1;
 }
 
-.consent-account-caption {
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .consent-account-email {
   color: var(--ink);
   font-size: 14px;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
@@ -429,24 +447,15 @@ code {
   gap: var(--space-2);
 }
 
-.consent-caption {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
 .consent-box {
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--hairline-strong);
   background: var(--surface-2);
 }
 
 .detail-row {
   display: flex;
   gap: var(--space-3);
-  align-items: flex-start;
+  align-items: baseline;
   padding: 10px var(--space-3);
   border-top: 1px solid var(--hairline);
 }
@@ -454,20 +463,20 @@ code {
 .detail-label {
   width: 7rem;
   flex: none;
-  color: var(--muted);
-  font-size: 14px;
+  padding-top: 2px;
 }
 
 .detail-value {
   min-width: 0;
   flex: 1;
-  color: var(--ink);
-  font-size: 14px;
+  color: var(--ink-secondary);
+  font-size: 13px;
   overflow-wrap: anywhere;
 }
 
 .detail-value strong {
-  font-weight: 500;
+  color: var(--ink);
+  font-weight: 550;
 }
 
 /* Permission rows
@@ -497,7 +506,7 @@ code {
 .perm-label {
   min-width: 0;
   color: var(--ink-secondary);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* Inside a consent box the rows carry the padding and the rules of the box. */
@@ -529,130 +538,240 @@ code {
 .consent-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 /* Account page
    ------------------------------------------------------------------------- */
 
+/* The width formula already keeps a 16px gutter on each side, so the shell
+   carries no inline padding; its left edge lines up with the header wordmark,
+   which uses the same formula. */
 main.account-shell {
-  --card-width: 38rem;
-  padding-top: var(--space-12);
+  width: min(100% - 32px, 72rem);
+  margin-inline: auto;
+  padding: var(--space-8) 0 var(--space-12);
+  align-self: start;
 }
 
-.account-card + .account-card {
-  margin-top: var(--space-6);
+.page-head {
+  display: flex;
+  gap: var(--space-4);
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+
+.page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.015em;
+}
+
+/* The two columns are independent stacks, so a tall card on one side does not
+   drag the other side's cards down with it. */
+.account-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.account-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
 .account-card h2 {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--space-1);
   color: var(--ink);
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.3;
-  letter-spacing: -.01em;
+  letter-spacing: -.005em;
 }
 
 .account-card h2 + p {
   margin: 0 0 var(--space-4);
   color: var(--muted);
-  font-size: 16px;
+  font-size: 14px;
 }
 
-/* Only a focused form fills its card width with the primary action. */
+/* An account card holds several unrelated forms, so no single action owns the
+   full width of it. */
 .account-card button {
   width: auto;
 }
 
-.account-note,
-.account-empty {
+.account-note {
   margin: var(--space-3) 0 0;
   color: var(--muted);
-  font-size: 14px;
-}
-
-.account-empty {
-  margin: 0;
-}
-
-.account-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.account-item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-}
-
-.account-item-head {
-  display: flex;
-  gap: var(--space-4);
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.account-item-body {
-  min-width: 0;
-}
-
-.account-item-title {
-  margin: 0;
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.account-meta {
-  margin: var(--space-1) 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.account-meta code {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-/* The dates of a grant close its entry, so a rule separates them from the
-   permissions above. */
-.account-footer {
-  margin: 0;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--hairline);
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.account-item form {
-  flex: none;
-}
-
-.account-card .account-item button {
-  width: auto;
-  min-height: 34px;
-  flex: none;
-  padding: 0 var(--space-3);
   font-size: 13px;
 }
 
-@media (max-width: 30rem) {
-  main.auth-shell {
-    padding-top: var(--space-8);
-  }
+/* Tables
+   ------------------------------------------------------------------------- */
 
-  .auth-card {
-    padding: var(--space-4);
+/* A table keeps its column widths, so a narrow card scrolls it rather than
+   letting the columns collapse into each other. */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--hairline);
+}
+
+/* A table that closes a card runs to the card's edges. Inset, it would draw a
+   second hairline a gutter inside the card's own border. */
+.auth-card > .table-wrap:last-child {
+  margin: 0 calc(var(--card-pad) * -1) calc(var(--card-pad) * -1);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
+  vertical-align: middle;
+}
+
+/* Every body row reserves the height of the compact buttons it may hold, so a
+   row with actions is no taller than one without. */
+.data-table tbody th,
+.data-table tbody td {
+  height: var(--control-height-sm);
+}
+
+.data-table thead th {
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--hairline);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Rows share one hairline instead of each cell carrying its own frame. */
+.data-table tbody tr + tr th,
+.data-table tbody tr + tr td {
+  border-top: 1px solid var(--hairline);
+}
+
+.cell-title {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 550;
+}
+
+/* A client id or other identifier that qualifies the row title. */
+.cell-subtitle {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* Timestamps read as one unit, so they never wrap mid-value. */
+.cell-moment {
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.cell-absent {
+  color: var(--muted);
+}
+
+/* Qualified by the table, because `.data-table th` would otherwise win on
+   specificity and keep these cells left-aligned. */
+.data-table .col-numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The action column is sized by its buttons; the flexible columns give up
+   width before it does. */
+.col-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* A form around a button is a block box; without this the button would sit
+   below the space the form claims in the cell. */
+.col-actions form {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.table-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* The scopes of a grant, as bare code tokens that wrap inside their cell. */
+.cell-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+
+/* Marks the row the viewer is acting from. */
+.status-tag {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--hairline-strong);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Keeps a header cell readable to screen readers without drawing a label. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Two columns of tables stop fitting well before the phone breakpoint. */
+@media (max-width: 60rem) {
+  .account-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 34rem) {
+  .user-code {
+    font-size: 20px;
+    letter-spacing: .16em;
+  }
+}
+
+@media (max-width: 30rem) {
+  main.auth-shell,
+  main.account-shell {
+    padding-top: var(--space-6);
   }
 
   .consent-card {
@@ -682,9 +801,9 @@ main.account-shell {
     grid-template-columns: 1fr;
   }
 
-  .account-item-head {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-3);
+  /* The action column keeps its buttons; the text columns tighten first. */
+  .data-table th,
+  .data-table td {
+    padding: var(--space-2) var(--space-3);
   }
 }

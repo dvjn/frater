@@ -11,7 +11,7 @@ Runs a server on your own machine and connects your AI agent to it.
 ```sh
 mkdir -p ./frater-data
 podman run -d --name frater \
-  -p 3000:3000 \
+  -p 3210:3210 \
   -v ./frater-data:/data \
   ghcr.io/dvjn/frater:latest
 ```
@@ -34,13 +34,13 @@ podman exec -it frater /usr/local/bin/frater bootstrap-superuser --email you@exa
 
 ## 3. Connect your agent
 
-The address is `http://localhost:3000/mcp`. Each client opens a browser once to
+The address is `http://localhost:3210/mcp`. Each client opens a browser once to
 sign in with the account above and to approve the permissions it asks for.
 
 ### Claude Code
 
 ```sh
-claude mcp add --transport http frater http://localhost:3000/mcp
+claude mcp add --transport http frater http://localhost:3210/mcp
 ```
 
 Then run `/mcp` inside Claude Code and sign in.
@@ -48,7 +48,7 @@ Then run `/mcp` inside Claude Code and sign in.
 ### Codex
 
 ```sh
-codex mcp add frater --url http://localhost:3000/mcp
+codex mcp add frater --url http://localhost:3210/mcp
 codex mcp login frater
 ```
 
@@ -59,7 +59,7 @@ codex mcp login frater
   "mcpServers": {
     "frater": {
       "type": "http",
-      "url": "http://localhost:3000/mcp"
+      "url": "http://localhost:3210/mcp"
     }
   }
 }
@@ -77,7 +77,7 @@ Talk to your agent:
 
 To find out what else you can ask for:
 
-> What can I do with frater?
+> What can I do with Frater?
 
 ## Next steps
 

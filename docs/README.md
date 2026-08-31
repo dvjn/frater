@@ -1,4 +1,4 @@
-# frater documentation
+# Frater documentation
 
 ## Start here
 

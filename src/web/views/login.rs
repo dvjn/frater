@@ -11,12 +11,12 @@ pub fn page(
     notice: Option<&str>,
 ) -> Markup {
     layout(
-        "Sign in · frater",
+        "Sign in · Frater",
         html! {
             main class="auth-shell" {
                 article class="auth-card" {
                     h1 { "Welcome back" }
-                    p { "Sign in to continue to frater." }
+                    p { "Sign in to continue to Frater." }
                     @if let Some(notice) = notice {
                         p class="auth-note" role="status" { (notice) }
                     }

@@ -16,7 +16,7 @@ install -d -o 65532 -g 65532 -m 0700 /srv/frater
 ```sh
 podman run -d --name frater \
   --restart unless-stopped \
-  -p 3000:3000 \
+  -p 3210:3210 \
   -v /srv/frater:/data \
   -e PUBLIC_URL=https://frater.example.com \
   ghcr.io/dvjn/frater:latest
@@ -32,7 +32,7 @@ podman exec -it frater /usr/local/bin/frater bootstrap-superuser --email you@exa
 
 ```sh
 podman logs -f frater                        # logs
-curl -fsS http://127.0.0.1:3000/healthz      # health
+curl -fsS http://127.0.0.1:3210/healthz      # health
 ```
 
 More: [Configuration](../configuration/README.md).
