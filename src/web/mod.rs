@@ -46,12 +46,18 @@ impl AppState {
         }
     }
 
+    fn cookie_max_age(&self) -> time::Duration {
+        time::Duration::try_from(self.domain.auth().absolute_lifetime())
+            .unwrap_or(time::Duration::DAY)
+    }
+
     fn session_cookie(&self, value: &str) -> Cookie<'static> {
         Cookie::build((self.session_cookie_name(), value.to_owned()))
             .path("/")
             .secure(self.secure_cookies())
             .http_only(true)
             .same_site(SameSite::Lax)
+            .max_age(self.cookie_max_age())
             .build()
     }
 
@@ -61,6 +67,7 @@ impl AppState {
             .secure(self.secure_cookies())
             .http_only(false)
             .same_site(SameSite::Lax)
+            .max_age(self.cookie_max_age())
             .build()
     }
 
@@ -2560,6 +2567,137 @@ mod tests {
         let (status, location, _) = get_account(&app, host, &cookies).await;
         assert_eq!(status, StatusCode::SEE_OTHER);
         assert_eq!(location, "/login");
+    }
+
+    #[tokio::test]
+    async fn a_lost_csrf_cookie_keeps_the_session_and_mints_a_new_token() {
+        let host = "127.0.0.1:3000";
+        let app = application().await;
+        let (cookies, old_csrf) =
+            sign_in(&app, host, "admin@example.com", "correct passw0rd!").await;
+        let session_only = cookies
+            .split("; ")
+            .find(|pair| pair.starts_with("__Host-frater_session="))
+            .unwrap()
+            .to_owned();
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/login")
+                    .header(header::HOST, host)
+                    .header(header::COOKIE, &session_only)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(response.headers()[header::LOCATION], "/");
+
+        let set: Vec<String> = response
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().unwrap().to_owned())
+            .collect();
+        assert!(
+            !set.iter()
+                .any(|value| value.starts_with("__Host-frater_session=;")),
+            "the session cookie must survive a lost CSRF cookie: {set:?}"
+        );
+        let csrf_pair = set
+            .iter()
+            .find(|value| value.starts_with("__Host-frater_csrf="))
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned();
+        let new_csrf = csrf_pair.split_once('=').unwrap().1.to_owned();
+        assert_ne!(new_csrf, old_csrf);
+
+        let refreshed = format!("{session_only}; {csrf_pair}");
+        let body = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("csrf", &new_csrf)
+            .finish();
+        let accepted = app
+            .clone()
+            .oneshot(form_post("/logout", host, &refreshed, body))
+            .await
+            .unwrap();
+        assert_eq!(accepted.status(), StatusCode::SEE_OTHER);
+
+        let (cookies, _) = sign_in(&app, host, "admin@example.com", "correct passw0rd!").await;
+        let session_only = cookies
+            .split("; ")
+            .find(|pair| pair.starts_with("__Host-frater_session="))
+            .unwrap()
+            .to_owned();
+        let stale = format!("{session_only}; __Host-frater_csrf={old_csrf}");
+        let body = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("csrf", &old_csrf)
+            .finish();
+        let rejected = app
+            .clone()
+            .oneshot(form_post("/logout", host, &stale, body))
+            .await
+            .unwrap();
+        assert_ne!(rejected.status(), StatusCode::SEE_OTHER);
+    }
+
+    #[tokio::test]
+    async fn session_cookies_outlive_the_browser() {
+        let host = "127.0.0.1:3000";
+        let app = application().await;
+
+        let page = app
+            .clone()
+            .oneshot(
+                Request::get("/login")
+                    .header(header::HOST, host)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        for value in page.headers().get_all(header::SET_COOKIE) {
+            let value = value.to_str().unwrap();
+            assert!(value.contains("Max-Age="), "session-only cookie: {value}");
+        }
+
+        let csrf_pair = page.headers()[header::SET_COOKIE]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned();
+        let csrf_value = csrf_pair.split_once('=').unwrap().1.to_owned();
+        let body = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("email", "admin@example.com")
+            .append_pair("password", "correct passw0rd!")
+            .append_pair("csrf", &csrf_value)
+            .finish();
+        let login = app
+            .clone()
+            .oneshot(
+                Request::post("/login")
+                    .header(header::HOST, host)
+                    .header(header::COOKIE, &csrf_pair)
+                    .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(login.status(), StatusCode::SEE_OTHER);
+        let set = login.headers().get_all(header::SET_COOKIE);
+        assert!(set.iter().count() > 0);
+        for value in set {
+            let value = value.to_str().unwrap();
+            assert!(value.contains("Max-Age="), "session-only cookie: {value}");
+        }
     }
 
     async fn consent_token(
