@@ -582,6 +582,7 @@ fn output_definitions() -> serde_json::Map<String, Value> {
     let nullable_string = json!({"type":["string","null"]});
     let count = json!({"type":"integer","minimum":0});
     let nullable_integer = json!({"type":["integer","null"]});
+    let nullable_stamp = json!({"type":["string","null"],"format":"date-time"});
     let entity_properties =
         json!({"id":uuid.clone(),"name":{"type":"string"},"contraction_type":{"type":"string"}});
 
@@ -684,7 +685,7 @@ fn output_definitions() -> serde_json::Map<String, Value> {
     });
     let personal_record = json!({
         "type":"object","additionalProperties":false,
-        "required":["exercise_id","exercise_name","max_load_g","max_load_reps","best_estimated_1rm_g","best_estimated_1rm_load_g","best_estimated_1rm_reps","longest_hold_sec","set_count","last_performed_at"],
+        "required":["exercise_id","exercise_name","max_load_g","max_load_reps","best_estimated_1rm_g","best_estimated_1rm_load_g","best_estimated_1rm_reps","longest_hold_sec","set_count","last_performed_at","max_load_at","longest_hold_at"],
         "properties":{
             "exercise_id":uuid.clone(),"exercise_name":{"type":"string"},
             "max_load_g":nullable_integer.clone(),"max_load_reps":nullable_integer.clone(),
@@ -692,7 +693,8 @@ fn output_definitions() -> serde_json::Map<String, Value> {
             "best_estimated_1rm_load_g":nullable_integer.clone(),
             "best_estimated_1rm_reps":nullable_integer.clone(),
             "longest_hold_sec":nullable_integer,
-            "set_count":count,"last_performed_at":stamp
+            "set_count":count,"last_performed_at":stamp,
+            "max_load_at":nullable_stamp.clone(),"longest_hold_at":nullable_stamp
         }
     });
     let bodyweight_reading = json!({

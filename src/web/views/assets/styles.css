@@ -612,6 +612,84 @@ main.account-shell {
   font-size: 13px;
 }
 
+.range-switch {
+  display: flex;
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface-2);
+}
+
+.range-option {
+  display: inline-flex;
+  min-height: var(--control-height-sm);
+  align-items: center;
+  padding: 0 var(--space-3);
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 550;
+  text-decoration: none;
+}
+
+.range-option + .range-option {
+  border-left: 1px solid var(--hairline);
+}
+
+.range-option:hover {
+  color: var(--ink);
+  background: var(--surface-3);
+}
+
+.range-option[aria-current="page"],
+.range-option[aria-current="page"]:hover {
+  color: var(--primary-ink);
+  background: var(--primary);
+}
+
+.tile-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.tile {
+  padding: var(--space-4);
+  border: 1px solid var(--hairline);
+  background: var(--surface-1);
+}
+
+.tile-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.tile-value {
+  margin-top: var(--space-1);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-note {
+  min-height: 1.5em;
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-grid-even {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-grid + .account-grid {
+  margin-top: var(--space-4);
+}
+
 /* Tables
    ------------------------------------------------------------------------- */
 
@@ -756,7 +834,9 @@ main.account-shell {
 
 /* Two columns of tables stop fitting well before the phone breakpoint. */
 @media (max-width: 60rem) {
-  .account-grid {
+  .account-grid,
+  .account-grid-even,
+  .tile-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }

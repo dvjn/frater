@@ -69,17 +69,19 @@ pub struct PersonalRecord {
     pub longest_hold_sec: Option<i64>,
     pub set_count: u64,
     pub last_performed_at: DateTime<Utc>,
+    pub max_load_at: Option<DateTime<Utc>>,
+    pub longest_hold_at: Option<DateTime<Utc>>,
 }
 
 /// What an exercise moves besides its external load: the share of bodyweight the
 /// movement carries, and the bodyweight that applied on the day of the session.
 #[derive(Clone, Copy, Debug, Default)]
-struct LoadContext {
+pub(super) struct LoadContext {
     bodyweight_share: i64,
     bodyweight_g: Option<i64>,
 }
 
-type LoadedSet<'a> = (LoadContext, &'a exercise_sets::Model);
+pub(super) type LoadedSet<'a> = (LoadContext, &'a exercise_sets::Model);
 
 fn effective_load_g(context: LoadContext, model: &exercise_sets::Model) -> i64 {
     crate::domain::bodyweight::effective_load_g(
@@ -105,31 +107,31 @@ fn set_volume_g(context: LoadContext, model: &exercise_sets::Model) -> i64 {
 
 /// A single set is already allowed to hold `i64::MAX` grams, so a plain sum
 /// would overflow on the second one.
-fn total_volume_g<'a>(sets: impl Iterator<Item = LoadedSet<'a>>) -> i64 {
+pub(super) fn total_volume_g<'a>(sets: impl Iterator<Item = LoadedSet<'a>>) -> i64 {
     sets.fold(0, |total, (context, set)| {
         total.saturating_add(set_volume_g(context, set))
     })
 }
 
-fn started_at(model: &sessions::Model) -> Result<DateTime<Utc>, DomainError> {
+pub(super) fn started_at(model: &sessions::Model) -> Result<DateTime<Utc>, DomainError> {
     Ok(DateTime::parse_from_rfc3339(&model.started_at)
         .map_err(|_| DomainError::NotFound)?
         .with_timezone(&Utc))
 }
 
-struct HistoryExercise {
-    model: session_exercises::Model,
-    sets: Vec<exercise_sets::Model>,
+pub(super) struct HistoryExercise {
+    pub(super) model: session_exercises::Model,
+    pub(super) sets: Vec<exercise_sets::Model>,
     load: LoadContext,
 }
 
-struct HistorySession {
-    model: sessions::Model,
-    exercises: Vec<HistoryExercise>,
+pub(super) struct HistorySession {
+    pub(super) model: sessions::Model,
+    pub(super) exercises: Vec<HistoryExercise>,
 }
 
 impl HistorySession {
-    fn loaded_sets(&self) -> impl Iterator<Item = LoadedSet<'_>> {
+    pub(super) fn loaded_sets(&self) -> impl Iterator<Item = LoadedSet<'_>> {
         self.exercises.iter().flat_map(HistoryExercise::loaded_sets)
     }
 }
@@ -141,7 +143,7 @@ impl HistoryExercise {
 }
 
 impl Domain {
-    async fn load_history(
+    pub(super) async fn load_history(
         &self,
         principal: &Principal,
         range: StatsRange,
@@ -430,6 +432,8 @@ impl Domain {
                             longest_hold_sec: None,
                             set_count: 0,
                             last_performed_at: started_at,
+                            max_load_at: None,
+                            longest_hold_at: None,
                         })
                     }
                 };
@@ -444,6 +448,7 @@ impl Domain {
                     if carries_load && record.max_load_g.is_none_or(|best| load_g > best) {
                         record.max_load_g = Some(load_g);
                         record.max_load_reps = set.reps;
+                        record.max_load_at = Some(started_at);
                     }
                     if carries_load
                         && let Some(estimate) = estimated_1rm_g(load_g, set.reps)
@@ -459,6 +464,7 @@ impl Domain {
                         && record.longest_hold_sec.is_none_or(|best| hold_sec > best)
                     {
                         record.longest_hold_sec = Some(hold_sec);
+                        record.longest_hold_at = Some(started_at);
                     }
                 }
             }

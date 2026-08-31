@@ -1,5 +1,5 @@
 use super::{AppState, authenticate, csrf_from_token, error::WebError, new_csrf_value, views};
-use crate::domain::{DomainError, Password, Principal};
+use crate::domain::{DomainError, Password, Principal, StatsRange, Timestamp};
 use axum::{
     Form,
     extract::{Path, Query, State},
@@ -7,13 +7,33 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::cookie::CookieJar;
+use chrono::{TimeDelta, Utc};
 use maud::Markup;
 use serde::Deserialize;
 
-pub(super) async fn root(State(state): State<AppState>, jar: CookieJar) -> Response {
+#[derive(Default, Deserialize)]
+pub(super) struct RootQuery {
+    range: Option<String>,
+}
+
+pub(super) async fn root(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Query(query): Query<RootQuery>,
+) -> Result<Response, WebError> {
     let csrf = state.csrf_value(&jar);
-    let signed_in = authenticate(&state, &jar, csrf).await.is_ok();
-    views::home::page(signed_in).into_response()
+    let Ok(principal) = authenticate(&state, &jar, csrf).await else {
+        return Ok(views::home::page(false).into_response());
+    };
+    let range = views::dashboard::Range::parse(query.range.as_deref());
+    let stats_range = StatsRange {
+        from: range
+            .days()
+            .map(|days| Timestamp::at(Utc::now() - TimeDelta::days(days))),
+        to: None,
+    };
+    let dashboard = state.domain.dashboard(&principal, stats_range).await?;
+    Ok(views::dashboard::page(range, &dashboard).into_response())
 }
 
 #[derive(Default, Deserialize)]
