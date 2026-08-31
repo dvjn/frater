@@ -11,8 +11,29 @@ watchexec = "2.7.0"
 [env]
 TARGETS = "{{ env.BUILD_TARGETS | default(value='x86_64-unknown-linux-musl:amd64 aarch64-unknown-linux-musl:arm64') }}"
 
+[tasks.local-bootstrap]
+description = "Create the local dev database with a signed-in superuser"
+env = { DATABASE_URL = "sqlite://data/dev.db?mode=rwc" }
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p data
+chmod 700 data
+# bootstrap-superuser refuses to run twice, so only a missing database file
+# triggers it. The password is fixed dev-only data, never a secret.
+if [[ ! -e data/dev.db ]]; then
+  printf 'Correct passw0rd!\n' | cargo run --quiet -- bootstrap-superuser \
+    --email admin@example.com --password-stdin
+fi
+echo "Local server: http://127.0.0.1:3210"
+echo "Email: admin@example.com"
+echo "Password: Correct passw0rd!"
+"""
+
 [tasks.dev]
 description = "Start the Axum development server with live reload"
+depends = ["local-bootstrap"]
+env = { DATABASE_URL = "sqlite://data/dev.db?mode=rwc" }
 run = "watchexec --restart --clear --watch src --watch Cargo.toml --watch Cargo.lock --exts rs,toml -- cargo run"
 
 [tasks.build]
