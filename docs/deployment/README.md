@@ -6,5 +6,5 @@
 | | Use it when |
 | --- | --- |
 | [Container](container.md) | one host, and you run the container yourself |
-| [Compose](compose.md) | one host, with frater and its proxy in one file |
+| [Compose](compose.md) | one host, with Frater and its proxy in one file |
 | [Kubernetes](kubernetes.md) | a cluster you already run |

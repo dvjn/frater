@@ -1,6 +1,6 @@
 # Compose
 
-Keeps frater and the proxy in front of it in one file, started together. This
+Keeps Frater and the proxy in front of it in one file, started together. This
 example uses Caddy, because it gets a certificate on its own; any reverse proxy
 works.
 
@@ -16,7 +16,7 @@ services:
     volumes:
       - frater-data:/data
     expose:
-      - "3000"
+      - "3210"
 
   caddy:
     image: docker.io/library/caddy:2
@@ -39,7 +39,7 @@ volumes:
 
 ```
 frater.example.com {
-	reverse_proxy frater:3000
+	reverse_proxy frater:3210
 }
 ```
 

@@ -1,6 +1,6 @@
-# frater
+# Frater
 
-> a self-hosted, ai-native fitness tracker
+> personal, AI-native fitness tracker
 
 ## Development
 

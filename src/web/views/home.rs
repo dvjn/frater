@@ -9,12 +9,12 @@ pub fn page(signed_in: bool) -> Markup {
         signed_out_nav()
     };
     layout_with_nav(
-        "frater",
+        "Frater",
         Some(action),
         html! {
             main class="home-shell" {
-                h1 { "frater" }
-                p { "a self-hosted fitness tracker" }
+                h1 { "Frater" }
+                p { "personal fitness tracker" }
             }
         },
     )

@@ -7,13 +7,13 @@ Everything is set through environment variables.
 | Variable | Default | Sets |
 | --- | --- | --- |
 | `PUBLIC_URL` | taken from request headers | the address people use |
-| `HTTP_ADDR` | `127.0.0.1:3000` (image: `0.0.0.0:3000`) | where it listens |
+| `HTTP_ADDR` | `127.0.0.1:3210` (image: `0.0.0.0:3210`) | where it listens |
 | `REGISTRATION_ENABLED` | `false` | whether sign-up is open |
 
 Set `PUBLIC_URL` to the address people type: `https://frater.example.com`.
 Every deployment needs it — it fixes the address the OAuth sign-in flow uses,
 and an `https` value marks session cookies `Secure`. A value with a path is
-rejected, so frater needs a host of its own.
+rejected, so Frater needs a host of its own.
 
 ## Mail
 

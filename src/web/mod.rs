@@ -2470,11 +2470,12 @@ mod tests {
 
         let (status, _, html) = get_account(&app, host, &first).await;
         assert_eq!(status, StatusCode::OK);
-        assert!(html.contains("Firefox on Linux (this session)"));
+        assert!(html.contains("Firefox on Linux"));
+        assert!(html.contains(r#"<span class="status-tag">This session</span>"#));
         assert!(html.contains("curl"));
 
         let session_id = |html: &str, marker: &str| {
-            html.split(r#"<li class="account-item">"#)
+            html.split("<tr>")
                 .find(|item| item.contains(marker))
                 .unwrap()
                 .split(r#"action="/account/sessions/"#)
@@ -2486,11 +2487,11 @@ mod tests {
                 .to_owned()
         };
         let other_id = session_id(&html, "curl");
-        let current_id = session_id(&html, "(this session)");
+        let current_id = session_id(&html, "This session");
 
         let (_, _, other_html) = get_account(&app, host, &other).await;
-        assert!(other_html.contains("Unknown client (this session)"));
-        let foreign_id = session_id(&other_html, "(this session)");
+        assert!(other_html.contains("Unknown client"));
+        let foreign_id = session_id(&other_html, "This session");
         let revoke = |id: &str, cookies: &str, csrf: &str| {
             let body = url::form_urlencoded::Serializer::new(String::new())
                 .append_pair("csrf", csrf)
@@ -3237,13 +3238,8 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert!(html.contains("Studio"));
         assert!(html.contains(&client_id));
-        for text in [
-            "workouts:write",
-            "Edit workouts",
-            "offline_access",
-            "Stay connected",
-        ] {
-            assert!(html.contains(text), "the card does not name {text}");
+        for text in ["workouts:write", "offline_access"] {
+            assert!(html.contains(text), "the row does not name {text}");
         }
         assert!(html.contains(&format!(r#"action="/account/apps/{client_id}/revoke""#)));
 

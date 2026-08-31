@@ -47,7 +47,7 @@ pub fn signed_in_nav() -> Markup {
 
 pub fn signed_out_nav() -> Markup {
     html! {
-        a href="/login" role="button" { "Sign in" }
+        a href="/login" role="button" class="compact" { "Sign in" }
     }
 }
 
@@ -70,11 +70,13 @@ pub fn layout_with_nav(title: &str, nav_action: Option<Markup>, body: Markup) ->
             }
             body {
                 div class="site-shell" {
-                    header class="site container" {
-                        nav class="site-nav" aria-label="Primary navigation" {
-                            a class="site-title" href="/" aria-label="frater home" { "frater" }
-                            @if let Some(nav_action) = nav_action {
-                                div class="nav-auth" { (nav_action) }
+                    header class="site" {
+                        div class="container" {
+                            nav class="site-nav" aria-label="Primary navigation" {
+                                a class="site-title" href="/" aria-label="Frater home" { "Frater" }
+                                @if let Some(nav_action) = nav_action {
+                                    div class="nav-auth" { (nav_action) }
+                                }
                             }
                         }
                     }

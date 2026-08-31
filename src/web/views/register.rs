@@ -4,12 +4,12 @@ use super::layout;
 
 pub fn page(csrf: &str, email: &str, error: Option<&str>) -> Markup {
     layout(
-        "Create account · frater",
+        "Create account · Frater",
         html! {
             main class="auth-shell" {
                 article class="auth-card" {
                     h1 { "Create your account" }
-                    p { "Sign up with your email address to use frater." }
+                    p { "Sign up with your email address to use Frater." }
                     @if let Some(error) = error {
                         p class="auth-error" role="alert" { (error) }
                     }
@@ -35,12 +35,12 @@ pub fn page(csrf: &str, email: &str, error: Option<&str>) -> Markup {
 
 pub fn sent(csrf: &str, email: &str, error: bool) -> Markup {
     layout(
-        "Check your email · frater",
+        "Check your email · Frater",
         html! {
             main class="auth-shell" {
                 article class="auth-card" {
                     h1 { "Check your email" }
-                    p { "If the address is new, frater sent a 6-digit code to it. Enter the code below." }
+                    p { "If the address is new, Frater sent a 6-digit code to it. Enter the code below." }
                     @if error {
                         p class="auth-error" role="alert" { "That code is invalid or expired." }
                     }

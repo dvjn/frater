@@ -4,12 +4,12 @@ use super::layout;
 
 pub fn page(csrf: &str, email: &str) -> Markup {
     layout(
-        "Reset password · frater",
+        "Reset password · Frater",
         html! {
             main class="auth-shell" {
                 article class="auth-card" {
                     h1 { "Reset your password" }
-                    p { "Enter your email address. frater sends a 6-digit code to it." }
+                    p { "Enter your email address. Frater sends a 6-digit code to it." }
                     form method="post" action="/reset" {
                         label for="email" { "Email" }
                         input type="email" id="email" name="email" value=(email)
@@ -29,12 +29,12 @@ pub fn page(csrf: &str, email: &str) -> Markup {
 
 pub fn sent(csrf: &str, email: &str, error: Option<&str>) -> Markup {
     layout(
-        "Check your email · frater",
+        "Check your email · Frater",
         html! {
             main class="auth-shell" {
                 article class="auth-card" {
                     h1 { "Check your email" }
-                    p { "If the address has an account, frater sent a 6-digit code to it. Enter the code and a new password." }
+                    p { "If the address has an account, Frater sent a 6-digit code to it. Enter the code and a new password." }
                     @if let Some(error) = error {
                         p class="auth-error" role="alert" { (error) }
                     }

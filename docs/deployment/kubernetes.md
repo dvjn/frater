@@ -46,7 +46,7 @@ spec:
         - name: frater
           image: ghcr.io/dvjn/frater:latest
           ports:
-            - containerPort: 3000
+            - containerPort: 3210
           env:
             - name: PUBLIC_URL
               value: https://frater.example.com
@@ -54,10 +54,10 @@ spec:
             - name: data
               mountPath: /data
           livenessProbe:
-            httpGet: { path: /healthz, port: 3000 }
+            httpGet: { path: /healthz, port: 3210 }
             initialDelaySeconds: 5
           readinessProbe:
-            httpGet: { path: /healthz, port: 3000 }
+            httpGet: { path: /healthz, port: 3210 }
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -76,8 +76,8 @@ metadata:
 spec:
   selector: { app: frater }
   ports:
-    - port: 3000
-      targetPort: 3000
+    - port: 3210
+      targetPort: 3210
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -95,7 +95,7 @@ spec:
               service:
                 name: frater
                 port:
-                  number: 3000
+                  number: 3210
   tls:
     - hosts: [frater.example.com]
       secretName: frater-tls
