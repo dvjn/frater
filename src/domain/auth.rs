@@ -437,6 +437,32 @@ impl AuthService {
         })
     }
 
+    pub fn absolute_lifetime(&self) -> Duration {
+        self.config.absolute_lifetime
+    }
+
+    pub async fn rotate_csrf(&self, token: &str) -> Result<CsrfToken, DomainError> {
+        let principal = self.authenticate(token, None).await?;
+        let (id, selector, _) = parse_token(token)?;
+        let mut csrf = [0u8; 32];
+        rand::rng().fill_bytes(&mut csrf);
+        let digest = hmac_digest(&self.config.session_hmac_key, CSRF_DOMAIN, &selector, &csrf);
+        let result = auth_sessions::Entity::update_many()
+            .col_expr(
+                auth_sessions::Column::CsrfDigest,
+                Expr::value(digest.to_vec()),
+            )
+            .filter(auth_sessions::Column::Id.eq(id.to_string()))
+            .filter(auth_sessions::Column::UserId.eq(principal.user_id().to_string()))
+            .filter(auth_sessions::Column::RevokedAt.is_null())
+            .exec(&self.db)
+            .await?;
+        if result.rows_affected == 0 {
+            return Err(DomainError::InvalidCredentials);
+        }
+        Ok(CsrfToken(URL_SAFE_NO_PAD.encode(csrf)))
+    }
+
     pub async fn logout(&self, principal: &Principal) -> Result<(), DomainError> {
         let PrincipalTransport::BrowserSession { session_id } = &principal.transport else {
             return Err(DomainError::InvalidCredentials);

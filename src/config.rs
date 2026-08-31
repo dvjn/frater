@@ -69,8 +69,8 @@ impl Config {
                 password_pepper: derive_key(&root_key, PASSWORD_PEPPER_INFO).to_vec(),
                 pepper_key_id: KEY_ID.to_owned(),
                 password_concurrency: PASSWORD_CONCURRENCY,
-                idle_lifetime: Duration::from_secs(30 * 60),
-                absolute_lifetime: Duration::from_secs(12 * 60 * 60),
+                idle_lifetime: Duration::from_secs(30 * 24 * 60 * 60),
+                absolute_lifetime: Duration::from_secs(90 * 24 * 60 * 60),
             },
             oauth: OAuthConfig {
                 hmac_key: *derive_key(&root_key, OAUTH_HMAC_INFO),

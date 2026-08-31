@@ -77,6 +77,16 @@ pub(super) async fn login_page(
         {
             return Redirect::to(return_to.as_deref().unwrap_or("/")).into_response();
         }
+        let session = jar.get(state.session_cookie_name()).map(|v| v.value());
+        if let Some(session) = session
+            && let Ok(token) = state.domain.auth().rotate_csrf(session).await
+        {
+            return (
+                jar.add(state.csrf_cookie(token.expose())),
+                Redirect::to(return_to.as_deref().unwrap_or("/")),
+            )
+                .into_response();
+        }
         let token = new_csrf_value();
         let page = views::login::page(&token, "", return_to.as_deref(), false, open, notice);
         return (
