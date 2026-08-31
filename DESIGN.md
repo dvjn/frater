@@ -145,7 +145,7 @@ Sizes are tokens too:
 
 ## Wide pages
 
-The account page is the first wide page; a future dashboard follows the same shell.
+The account page and the dashboard share the wide shell.
 
 - A wide page uses `width: min(100% - 32px, 72rem)` instead of `--card-width`, with a page title in a `page-head` row above the content.
 - The account grid is `grid-template-columns: minmax(0, 3fr) minmax(0, 2fr)`: tables on the wide left, forms on the narrow right. Each column is its own flex stack with a `--space-4` gap, so a tall card in one column does not stretch the cards in the other.
@@ -164,10 +164,11 @@ The account page is the first wide page; a future dashboard follows the same she
 
 ## Data pages
 
-These patterns are specified for future pages that show recorded data, such as a dashboard. Build them from the tokens above when the first such page lands.
+The dashboard is the first data page. It uses the wide shell, a row of stat tiles, a time-range switch, and two even two-column grids of table cards.
 
-- A stat tile is a micro-label, a value at `32px`, weight `600`, `tabular-nums`, and an optional one-line note in `--muted`. Give the note a fixed `min-height` so tiles with and without a note stay the same height.
-- A time-range switch is a row of links, not a form, so the range lives in the URL. The current range uses `--primary` with `aria-current="page"`.
+- A stat tile is a micro-label, a value at `32px`, weight `600`, `tabular-nums`, and an optional one-line note in `--muted`. The note keeps a fixed `min-height`, so tiles with and without a note stay the same height. Tiles sit in a three-column grid that collapses with the account grid at `60rem`.
+- A time-range switch is a row of links, not a form, so the range lives in the URL. The links join into one segmented control on `--surface-2` inside a `--hairline-strong` border, separated by `--hairline` rules, at compact control height. The current range uses `--primary` with `--primary-ink` text and `aria-current="page"`.
+- Cards of equal weight use the even variant of the account grid, `repeat(2, minmax(0, 1fr))`, with the same `60rem` collapse.
 
 ## Detail and confirmation views
 

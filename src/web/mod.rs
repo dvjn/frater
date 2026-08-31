@@ -3304,4 +3304,179 @@ mod tests {
             .unwrap();
         assert_eq!(repeated.status(), StatusCode::NOT_FOUND);
     }
+
+    async fn dashboard_application() -> (Router, Arc<Domain>, sea_orm::DatabaseConnection) {
+        use sea_orm::ConnectionTrait;
+        let db = Database::connect("sqlite::memory:").await.unwrap();
+        db.execute_unprepared("PRAGMA foreign_keys=ON")
+            .await
+            .unwrap();
+        Migrator::up(&db, None).await.unwrap();
+        let domain = Arc::new(
+            Domain::new(
+                db.clone(),
+                AuthConfig {
+                    session_hmac_key: [9; 32],
+                    session_key_id: "session".into(),
+                    password_pepper: b"pepper".to_vec(),
+                    pepper_key_id: "pepper".into(),
+                    password_concurrency: 2,
+                    idle_lifetime: Duration::from_secs(60),
+                    absolute_lifetime: Duration::from_secs(120),
+                },
+                OAuthConfig {
+                    hmac_key: [8; 32],
+                    key_id: "oauth".into(),
+                },
+            )
+            .await
+            .unwrap(),
+        );
+        bootstrap_superuser(
+            &db,
+            b"pepper",
+            "pepper",
+            "admin@example.com",
+            &Password::new("correct passw0rd!".into()).unwrap(),
+        )
+        .await
+        .unwrap();
+        let router = router(AppState {
+            domain: domain.clone(),
+            origin: OriginPolicy::new(None),
+        });
+        (router, domain, db)
+    }
+
+    async fn get_page(app: &Router, host: &str, cookies: &str, path: &str) -> String {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(path)
+                    .header(header::HOST, host)
+                    .header(header::COOKIE, cookies)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{path}");
+        let body = axum::body::to_bytes(response.into_body(), 256 * 1024)
+            .await
+            .unwrap();
+        String::from_utf8(body.to_vec()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn dashboard_shows_seeded_data_and_the_hero_stays_for_visitors() {
+        use crate::domain::{
+            AddExerciseSet, CreateWorkoutSession, LogWorkout, LogWorkoutExercise, Timestamp,
+        };
+        use sea_orm::ConnectionTrait;
+
+        let host = "127.0.0.1:3000";
+        let (app, domain, db) = dashboard_application().await;
+
+        let hero = get_page(&app, host, "", "/").await;
+        assert!(hero.contains("personal fitness tracker"));
+        assert!(!hero.contains("Dashboard"));
+
+        let (cookies, _) = sign_in(&app, host, "admin@example.com", "correct passw0rd!").await;
+        let empty = get_page(&app, host, &cookies, "/").await;
+        assert!(empty.contains("Dashboard"));
+        for message in [
+            "No workouts.",
+            "No runs.",
+            "No exercise records.",
+            "No run records.",
+        ] {
+            assert!(empty.contains(message), "{message}");
+        }
+
+        let identity = domain
+            .auth()
+            .verify_password_identity(
+                "admin@example.com",
+                &Password::new("correct passw0rd!".into()).unwrap(),
+            )
+            .await
+            .unwrap();
+        let principal =
+            crate::domain::test_oauth_principal(identity.user_id, "superuser", "workouts:write");
+        let exercise_id = uuid::Uuid::now_v7();
+        db.execute_unprepared(&format!(
+            "INSERT INTO exercises(id,name,contraction_type) VALUES('{exercise_id}','Bench press','dynamic')"
+        ))
+        .await
+        .unwrap();
+        let yesterday = Timestamp::at(chrono::Utc::now() - chrono::TimeDelta::days(1));
+        domain
+            .log_workout(
+                &principal,
+                LogWorkout {
+                    started_at: yesterday,
+                    label: Some("Push day".into()),
+                    notes: None,
+                    exercises: vec![LogWorkoutExercise {
+                        exercise_id,
+                        notes: None,
+                        sets: vec![AddExerciseSet {
+                            position: None,
+                            set_type: "working".into(),
+                            reps: Some(5),
+                            hold_sec: None,
+                            load_g: 100_000,
+                            notes: None,
+                        }],
+                    }],
+                },
+            )
+            .await
+            .unwrap();
+        domain
+            .create_session(
+                &principal,
+                CreateWorkoutSession {
+                    started_at: yesterday,
+                    label: Some("Morning run".into()),
+                    notes: None,
+                    activity: crate::domain::CreateActivity::Run {
+                        distance_m: Some(10_000),
+                        duration_sec: Some(3_000),
+                        elevation_gain_m: 0,
+                        splits: Vec::new(),
+                    },
+                },
+            )
+            .await
+            .unwrap();
+
+        let seeded = get_page(&app, host, &cookies, "/").await;
+        assert!(seeded.contains(r#"aria-label="Time range""#));
+        assert!(seeded.contains("1 strength · 1 run"));
+        assert!(seeded.contains("500 kg"));
+        assert!(seeded.contains("across 1 exercise"));
+        assert!(seeded.contains("10.0 km"));
+        assert!(seeded.contains("50:00"));
+        assert!(seeded.contains("Push day"));
+        assert!(seeded.contains("Morning run"));
+        assert!(seeded.contains("Bench press"));
+        assert!(seeded.contains("100 kg × 5"));
+        assert!(seeded.contains("Est. 1RM"));
+        assert!(seeded.contains("117 kg"));
+        assert!(!seeded.contains("Half marathon"));
+        for record in ["1 km", "5 km", "10 km", "5:00 /km"] {
+            assert!(seeded.contains(record), "{record}");
+        }
+        assert!(!seeded.contains("No workouts."));
+        assert!(!seeded.contains("No runs."));
+
+        let all = get_page(&app, host, &cookies, "/?range=all").await;
+        assert!(all.contains("Dashboard"));
+        assert!(
+            all.contains(r#"aria-current="page" href="/?range=all""#)
+                || all.contains(r#"href="/?range=all" aria-current="page""#)
+        );
+        assert!(all.contains("Push day"));
+    }
 }

@@ -1,3 +1,4 @@
+mod dashboard;
 mod exercises;
 mod history;
 mod log;
@@ -10,7 +11,8 @@ use uuid::Uuid;
 
 use super::{catalogue::Page, error::DomainError};
 
-pub use history::StatsRange;
+pub use dashboard::{Dashboard, RunListEntry, RunRecord};
+pub use history::{PersonalRecord, StatsRange, WorkoutListEntry};
 pub use log::{LogWorkout, LogWorkoutExercise, ReplaceRun};
 
 pub const MAX_SESSION_EXERCISES: usize = 100;

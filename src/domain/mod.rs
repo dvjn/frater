@@ -35,9 +35,12 @@ pub use oauth::{
     default_registration_scope, granted_scope, normalize_user_code, resource_scopes, scope_allows,
 };
 pub use secrets::Password;
+#[cfg(test)]
+pub(crate) use workouts::CreateActivity;
 pub use workouts::{
-    AddExerciseSet, CreateWorkoutSession, LogWorkout, LogWorkoutExercise, MAX_RUN_SPLITS,
-    ReplaceRun, RunSplit, SessionFilter, StatsRange, Timestamp,
+    AddExerciseSet, CreateWorkoutSession, Dashboard, LogWorkout, LogWorkoutExercise,
+    MAX_RUN_SPLITS, PersonalRecord, ReplaceRun, RunListEntry, RunRecord, RunSplit, SessionFilter,
+    StatsRange, Timestamp, WorkoutListEntry,
 };
 
 #[cfg(test)]
