@@ -1,5 +1,5 @@
 [tools]
-rust = { version = "1.98.0", components = "rustfmt,clippy" }
+rust = { version = "1.98.1", components = "rustfmt,clippy" }
 zig = "0.16.0"
 # The github backend downloads prebuilt binaries from GitHub releases, so no
 # tool compiles from source. The rustsec repo is a monorepo, so the version is
