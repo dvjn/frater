@@ -24,10 +24,9 @@ use crate::domain::{Domain, Principal};
 
 use schemas::{TOOL_SPECS, output_schema_for_tool, schema_for_tool};
 
-/// The one protocol revision this server serves. The list bounds what
-/// `initialize` may agree to, so every offer gets 2026-07-28 back: per the MCP
-/// lifecycle the server answers an unsupported offer with a revision it does
-/// support, and the client then decides whether to continue.
+/// The one protocol revision this server serves. It uses `server/discover`
+/// and per-request protocol metadata instead of an `initialize` handshake.
+/// Legacy initialize offers are rejected because no handshake revision is served.
 pub(crate) const SUPPORTED_PROTOCOL_VERSIONS: &[ProtocolVersion] = &[ProtocolVersion::V_2026_07_28];
 
 #[derive(Clone)]

@@ -8,7 +8,7 @@ use axum::{
 use futures::{StreamExt, stream::BoxStream};
 use rmcp::{
     model::{
-        CallToolRequestParams, ClientCapabilities, ClientInfo, ClientJsonRpcMessage,
+        CallToolRequestParams, ClientCapabilities, ClientConfig, ClientJsonRpcMessage,
         Implementation, ProtocolVersion, ServerJsonRpcMessage,
     },
     service::{ClientLifecycleMode, ClientServiceExt},
@@ -612,7 +612,7 @@ async fn rmcp_client_completes_the_whole_connect_path_over_the_router() {
         client,
         StreamableHttpClientTransportConfig::with_uri(MCP_URI),
     );
-    let mut client_info = ClientInfo::default();
+    let mut client_info = ClientConfig::default();
     client_info.protocol_version = ProtocolVersion::V_2026_07_28;
     client_info.capabilities = ClientCapabilities::default();
     client_info.client_info = Implementation::new("conformance", "1");
@@ -657,25 +657,11 @@ async fn rmcp_client_completes_the_whole_connect_path_over_the_router() {
 }
 
 #[tokio::test]
-async fn initialize_negotiates_the_one_supported_version() {
+async fn initialize_is_rejected_for_the_discovery_only_protocol() {
     let fixture = fixture().await;
     let token = oauth_dance(&fixture.app, "workouts:read").await;
 
-    let (status, headers, body) = send(
-        &fixture.app,
-        mcp_post(Some(&token), &initialize_body("2026-07-28")),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let message = jsonrpc_message(&headers, &body);
-    assert_eq!(message["result"]["protocolVersion"], "2026-07-28");
-    assert_eq!(
-        message["result"]["serverInfo"]["name"],
-        env!("CARGO_PKG_NAME")
-    );
-    assert!(message["result"]["capabilities"]["tools"].is_object());
-
-    for offered in ["2025-06-18", "2025-11-25", "1999-01-01"] {
+    for offered in ["2026-07-28", "2025-06-18", "2025-11-25", "1999-01-01"] {
         let (status, headers, body) = send(
             &fixture.app,
             mcp_post(Some(&token), &initialize_body(offered)),
@@ -683,36 +669,29 @@ async fn initialize_negotiates_the_one_supported_version() {
         .await;
         assert_eq!(status, StatusCode::OK, "offer {offered} must not fail");
         let message = jsonrpc_message(&headers, &body);
-        assert_eq!(
-            message["result"]["protocolVersion"], "2026-07-28",
-            "offer {offered} must get the server's supported version"
-        );
+        assert_eq!(message["error"]["code"], -32022, "response: {message}");
+        assert_eq!(message["error"]["data"]["requested"], offered);
+        assert_eq!(message["error"]["data"]["supported"], json!(["2026-07-28"]));
+        assert!(message.get("result").is_none());
     }
     fixture.db.close().await.unwrap();
 }
 
 #[tokio::test]
-async fn the_post_initialize_calls_a_client_makes_all_succeed() {
+async fn the_post_discovery_calls_a_client_makes_all_succeed() {
     let fixture = fixture().await;
     let token = oauth_dance(&fixture.app, "workouts:read catalogue:read").await;
 
-    let (status, headers, _) = send(
+    let (status, headers, body) = send(
         &fixture.app,
-        mcp_post(Some(&token), &initialize_body("2026-07-28")),
+        mcp_post(Some(&token), &call_body(1, "server/discover", json!({}))),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(headers.get("mcp-session-id"), None);
-
-    let notification = json!({
-        "jsonrpc": "2.0",
-        "method": "notifications/initialized",
-        "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}}
-    });
-    let (status, _, _) = send(&fixture.app, mcp_post(Some(&token), &notification)).await;
-    assert!(
-        status == StatusCode::ACCEPTED || status == StatusCode::OK,
-        "notifications/initialized must be accepted, got {status}"
+    assert_eq!(
+        jsonrpc_message(&headers, &body)["result"]["supportedVersions"],
+        json!(["2026-07-28"])
     );
 
     let (status, headers, body) = send(
@@ -946,7 +925,7 @@ async fn an_origin_from_another_site_is_rejected_and_the_matching_one_passes() {
     let token = oauth_dance(&fixture.app, "workouts:read").await;
 
     let with_origin = |origin: &'static str| {
-        let mut request = mcp_post(Some(&token), &initialize_body("2026-07-28"));
+        let mut request = mcp_post(Some(&token), &call_body(1, "server/discover", json!({})));
         request
             .headers_mut()
             .insert(header::ORIGIN, HeaderValue::from_static(origin));
@@ -957,8 +936,8 @@ async fn an_origin_from_another_site_is_rejected_and_the_matching_one_passes() {
     let (status, headers, body) = send(&fixture.app, with_origin(ISSUER)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
-        jsonrpc_message(&headers, &body)["result"]["protocolVersion"],
-        "2026-07-28"
+        jsonrpc_message(&headers, &body)["result"]["supportedVersions"],
+        json!(["2026-07-28"])
     );
     fixture.db.close().await.unwrap();
 }
@@ -1003,19 +982,19 @@ async fn a_deployment_without_a_public_url_accepts_its_own_host() {
 }
 
 #[tokio::test]
-async fn the_request_contract_a_client_must_meet_after_the_handshake() {
+async fn the_request_contract_a_client_must_meet_after_discovery() {
     let fixture = fixture().await;
     let token = oauth_dance(&fixture.app, "workouts:read").await;
 
     let (status, headers, body) = send(
         &fixture.app,
-        mcp_post(Some(&token), &initialize_body("2026-07-28")),
+        mcp_post(Some(&token), &call_body(1, "server/discover", json!({}))),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
-        jsonrpc_message(&headers, &body)["result"]["protocolVersion"],
-        "2026-07-28"
+        jsonrpc_message(&headers, &body)["result"]["supportedVersions"],
+        json!(["2026-07-28"])
     );
 
     let request = Request::post("/mcp")
@@ -1086,6 +1065,11 @@ async fn the_discover_document_names_the_one_supported_revision() {
         discovered["result"]["supportedVersions"],
         json!(["2026-07-28"])
     );
+    assert_eq!(
+        discovered["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
+        env!("CARGO_PKG_NAME")
+    );
     assert!(discovered["result"]["capabilities"]["tools"].is_object());
+    assert!(discovered["result"]["capabilities"]["resources"].is_object());
     fixture.db.close().await.unwrap();
 }

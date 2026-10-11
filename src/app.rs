@@ -549,17 +549,23 @@ mod tests {
         let admin = bearer(&fixture.admin_token);
         let workouts_only = bearer(&fixture.workouts_only_token);
 
-        let initialized = response_json(
+        let discovered = response_json(
             app.clone()
-                .oneshot(initialize_request(Some(&read)))
+                .oneshot(mcp_request(
+                    Some(&read),
+                    json!({"jsonrpc":"2.0","id":1,"method":"server/discover","params":{}}),
+                ))
                 .await
                 .unwrap(),
         )
         .await;
-        assert_eq!(initialized["result"]["protocolVersion"], "2026-07-28");
-        assert!(initialized["result"]["capabilities"].get("tools").is_some());
+        assert_eq!(
+            discovered["result"]["supportedVersions"],
+            json!(["2026-07-28"])
+        );
+        assert!(discovered["result"]["capabilities"].get("tools").is_some());
         assert!(
-            initialized["result"]["capabilities"]
+            discovered["result"]["capabilities"]
                 .get("resources")
                 .is_some()
         );

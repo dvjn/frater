@@ -7,7 +7,7 @@ use rmcp::{
         CacheScope, Implementation, ListResourceTemplatesResult, ListResourcesResult,
         ListToolsResult, PaginatedRequestParams, ProtocolVersion, ReadResourceRequestParams,
         ReadResourceResponse, ReadResourceResult, Resource, ResourceContents, ResourceTemplate,
-        ServerCapabilities, ServerInfo, Tool,
+        ServerCapabilities, ServerConfig, Tool,
     },
     service::RequestContext,
     tool_handler,
@@ -28,13 +28,13 @@ impl ServerHandler for McpServer {
         Cow::Borrowed(SUPPORTED_PROTOCOL_VERSIONS)
     }
 
-    fn get_info(&self) -> ServerInfo {
+    fn get_info(&self) -> ServerConfig {
         let capabilities = ServerCapabilities::builder()
             .enable_tools()
             .enable_resources()
             .build();
         let instructions = "Authenticated fitness catalogue and owner-scoped workout CRUD. Catalogue reads require catalogue:read; catalogue writes require catalogue:write plus superuser; workout reads require workouts:read; workout writes require workouts:write.";
-        ServerInfo::new(capabilities)
+        ServerConfig::new(capabilities)
             .with_protocol_version(ProtocolVersion::V_2026_07_28)
             .with_server_info(Implementation::new(
                 env!("CARGO_PKG_NAME"),
