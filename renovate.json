@@ -9,6 +9,12 @@
   "dependencyDashboard": true,
   "packageRules": [
     {
+      "description": "Keep SSE types compatible with rmcp; revisit when rmcp upgrades sse-stream.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["sse-stream"],
+      "allowedVersions": "<0.3.0"
+    },
+    {
       "matchManagers": ["cargo"],
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "Rust dependencies"
