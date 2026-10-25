@@ -1,4 +1,4 @@
-use rmcp::model::JsonObject;
+use rmcp::model::{JsonObject, ToolAnnotations};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -873,6 +873,88 @@ pub(super) fn output_schema_for_tool(name: &str) -> JsonObject {
     schema
 }
 
+pub(super) fn title_for_tool(name: &str) -> &'static str {
+    match name {
+        "list_muscles" => "List muscles",
+        "get_muscle" => "Get muscle",
+        "create_muscle" => "Create muscle",
+        "update_muscle" => "Rename muscle",
+        "delete_muscle" => "Delete muscle",
+        "list_equipment" => "List equipment",
+        "get_equipment" => "Get equipment",
+        "create_equipment" => "Create equipment",
+        "update_equipment" => "Rename equipment",
+        "delete_equipment" => "Delete equipment",
+        "list_exercises" => "List exercises",
+        "get_exercise" => "Get exercise",
+        "resolve_exercises" => "Resolve exercises",
+        "create_exercise" => "Create exercise",
+        "update_exercise" => "Replace exercise",
+        "delete_exercise" => "Delete exercise",
+        "list_workouts" => "List workouts",
+        "get_workout_session" => "Get workout session",
+        "create_workout_session" => "Create workout session",
+        "delete_workout_session" => "Delete workout session",
+        "log_workout" => "Log workout",
+        "replace_workout" => "Replace workout",
+        "exercise_history" => "Exercise history",
+        "personal_records" => "Personal records",
+        "log_bodyweight" => "Log bodyweight",
+        "list_bodyweight" => "List bodyweight",
+        "delete_bodyweight" => "Delete bodyweight",
+        _ => "",
+    }
+}
+
+/// `readOnlyHint` and `idempotentHint` carry HTTP's safe and idempotent
+/// methods (RFC 9110 §9.2.1, §9.2.2): a read changes nothing, a create adds a
+/// row on every call like POST, and a rename, replace, upsert, or delete leaves
+/// the same state however often it is repeated, like PUT and DELETE.
+/// `replace_workout` reissues its row ids on every call, but the workout it
+/// stores is the same, which is the effect RFC 9110 asks about. No tool reaches
+/// past this server's database, so none is open-world. The hints are advisory:
+/// `dispatch_tool` enforces scopes and roles whatever a client makes of them.
+pub(super) fn annotations_for_tool(name: &str) -> ToolAnnotations {
+    let annotations = ToolAnnotations::with_title(title_for_tool(name)).open_world(false);
+    match name {
+        "list_muscles"
+        | "get_muscle"
+        | "list_equipment"
+        | "get_equipment"
+        | "list_exercises"
+        | "get_exercise"
+        | "resolve_exercises"
+        | "list_workouts"
+        | "get_workout_session"
+        | "exercise_history"
+        | "personal_records"
+        | "list_bodyweight" => annotations.read_only(true),
+        "create_muscle"
+        | "create_equipment"
+        | "create_exercise"
+        | "create_workout_session"
+        | "log_workout" => annotations
+            .read_only(false)
+            .destructive(false)
+            .idempotent(false),
+        "update_muscle"
+        | "delete_muscle"
+        | "update_equipment"
+        | "delete_equipment"
+        | "update_exercise"
+        | "delete_exercise"
+        | "delete_workout_session"
+        | "replace_workout"
+        | "log_bodyweight"
+        | "delete_bodyweight" => annotations
+            .read_only(false)
+            .destructive(true)
+            .idempotent(true),
+        // The spec defaults: assume the worst of a tool nobody classified.
+        _ => ToolAnnotations::new(),
+    }
+}
+
 pub(super) fn example_for_tool(name: &str) -> Value {
     let id = "0199a1f0-0000-7000-8000-000000000000";
     match name {
@@ -1118,7 +1200,18 @@ mod tests {
             .map(|(name, _, _)| *name)
             .collect::<std::collections::HashSet<_>>();
         assert_eq!(names.len(), 27);
-        for (name, _, _) in TOOL_SPECS {
+        for (name, _, scope) in TOOL_SPECS {
+            // Every tool is classified, and a tool that needs no write scope
+            // must say it changes nothing.
+            let annotations = annotations_for_tool(name);
+            assert!(!title_for_tool(name).is_empty(), "tool {name} has no title");
+            assert_eq!(annotations.open_world_hint, Some(false), "tool {name}");
+            assert_eq!(
+                annotations.read_only_hint,
+                Some(scope.ends_with(":read")),
+                "tool {name}"
+            );
+
             let schema = schema_for_tool(name);
             assert_eq!(schema.get("type"), Some(&json!("object")));
             assert_eq!(schema.get("additionalProperties"), Some(&json!(false)));

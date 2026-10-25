@@ -22,7 +22,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::domain::{Domain, Principal};
 
-use schemas::{TOOL_SPECS, output_schema_for_tool, schema_for_tool};
+use schemas::{
+    TOOL_SPECS, annotations_for_tool, output_schema_for_tool, schema_for_tool, title_for_tool,
+};
 
 /// The one protocol revision this server serves. It uses `server/discover`
 /// and per-request protocol metadata instead of an `initialize` handshake.
@@ -49,7 +51,9 @@ impl McpServer {
         };
         for (name, description, _) in TOOL_SPECS {
             let tool = Tool::new(*name, *description, schema_for_tool(name))
-                .with_raw_output_schema(Arc::new(output_schema_for_tool(name)));
+                .with_title(title_for_tool(name))
+                .with_raw_output_schema(Arc::new(output_schema_for_tool(name)))
+                .with_annotations(annotations_for_tool(name));
             server.tool_router.add_route(ToolRoute::new_dyn(
                 tool,
                 |mut context: ToolCallContext<'_, Self>| {

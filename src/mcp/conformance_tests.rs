@@ -705,6 +705,17 @@ async fn the_post_discovery_calls_a_client_makes_all_succeed() {
         !tools["result"]["tools"].as_array().unwrap().is_empty(),
         "tools/list must not be empty"
     );
+    let list_muscles = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "list_muscles")
+        .unwrap();
+    assert_eq!(list_muscles["title"], "List muscles");
+    assert_eq!(
+        list_muscles["annotations"],
+        json!({"title": "List muscles", "readOnlyHint": true, "openWorldHint": false})
+    );
 
     let (status, headers, body) = send(
         &fixture.app,
