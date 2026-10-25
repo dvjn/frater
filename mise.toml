@@ -1,11 +1,11 @@
 [tools]
-rust = { version = "1.99.0", components = "rustfmt,clippy" }
+rust = { version = "1.99.1", components = "rustfmt,clippy" }
 zig = "0.16.0"
 # The github backend downloads prebuilt binaries from GitHub releases, so no
 # tool compiles from source. The rustsec repo is a monorepo, so the version is
 # the full release tag of cargo-audit.
 "github:rustsec/rustsec" = { version = "cargo-audit/v0.22.2" }
-"github:rust-cross/cargo-zigbuild" = { version = "0.23.4" }
+"github:rust-cross/cargo-zigbuild" = { version = "0.24.0" }
 watchexec = "2.8.0"
 
 [env]
