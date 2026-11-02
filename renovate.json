@@ -15,9 +15,16 @@
       "allowedVersions": "<0.3.0"
     },
     {
+      "description": "Crate updates share one PR, which also runs cargo update so indirect crates get refreshed",
       "matchManagers": ["cargo"],
       "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "Rust dependencies"
+      "groupName": "Rust dependencies",
+      "postUpgradeTasks": {
+        "commands": ["cargo update"],
+        "fileFilters": ["Cargo.lock"],
+        "executionMode": "branch",
+        "installTools": { "rust": {} }
+      }
     },
     {
       "matchManagers": ["github-actions"],
